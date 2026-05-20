@@ -1,0 +1,28 @@
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY worker/requirements.txt /app/worker/requirements.txt
+RUN pip install --no-cache-dir -r /app/worker/requirements.txt
+
+# Copy shared module
+COPY shared/ /app/shared/
+
+# Copy worker module
+COPY worker/ /app/worker/
+
+# Copy data directory
+COPY data/ /app/data/
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "-m", "worker.main"]

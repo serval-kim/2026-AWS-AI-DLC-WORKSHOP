@@ -1,0 +1,8 @@
+# Override for CPU-only environments (no GPU)
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.cpu.yml up
+services:
+  video-worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile.cpu
+    deploy: {}  # Remove GPU reservation

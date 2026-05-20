@@ -1,0 +1,41 @@
+services:
+  api-server:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - credentials.env
+    environment:
+      - REDIS_HOST=redis
+      - API_CALLBACK_URL=http://api-server:8000/callback
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  video-worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    env_file:
+      - credentials.env
+    environment:
+      - REDIS_HOST=redis
+      - API_CALLBACK_URL=http://api-server:8000/callback
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
