@@ -1,79 +1,67 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-/**
- * Infinite scrolling road with lane markings and roadside lights.
- */
+/** Monochrome infinite road */
 export default function Road({ speed = 1 }) {
   const markingsRef = useRef();
   const offset = useRef(0);
 
   useFrame((_, delta) => {
-    offset.current = (offset.current + delta * speed * 6) % 4;
-    if (markingsRef.current) {
-      markingsRef.current.position.x = offset.current;
+    if (speed > 0) {
+      offset.current = (offset.current + delta * speed * 7) % 4;
+      if (markingsRef.current) {
+        markingsRef.current.position.x = offset.current;
+      }
     }
   });
 
-  const roadMat = new THREE.MeshStandardMaterial({
-    color: '#111118',
-    roughness: 0.9,
-    metalness: 0.05,
-  });
-
-  const markingMat = new THREE.MeshStandardMaterial({
-    color: '#f0e060',
-    emissive: '#f0e060',
-    emissiveIntensity: 0.3,
-  });
-
-  const shoulderMat = new THREE.MeshStandardMaterial({
-    color: '#1a1a22',
-    roughness: 1,
-  });
+  const roadMat     = useMemo(() => new THREE.MeshStandardMaterial({ color: '#111111', roughness: 0.95, metalness: 0.0 }), []);
+  const shoulderMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#0d0d0d', roughness: 1.0 }), []);
+  const markingMat  = useMemo(() => new THREE.MeshStandardMaterial({ color: '#888888', emissive: '#888888', emissiveIntensity: 0.15 }), []);
+  const edgeMat     = useMemo(() => new THREE.MeshStandardMaterial({ color: '#aaaaaa', emissive: '#aaaaaa', emissiveIntensity: 0.2 }), []);
+  const groundMat   = useMemo(() => new THREE.MeshStandardMaterial({ color: '#080808', roughness: 1.0 }), []);
 
   return (
     <group>
       {/* Road surface */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.36, 0]} receiveShadow material={roadMat}>
-        <planeGeometry args={[80, 8]} />
+        <planeGeometry args={[120, 9]} />
       </mesh>
 
-      {/* Shoulder strips */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.355, 3.2]} material={shoulderMat}>
-        <planeGeometry args={[80, 1.6]} />
+      {/* Shoulders */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.355, 3.4]} material={shoulderMat}>
+        <planeGeometry args={[120, 2.0]} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.355, -3.2]} material={shoulderMat}>
-        <planeGeometry args={[80, 1.6]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.355, -3.4]} material={shoulderMat}>
+        <planeGeometry args={[120, 2.0]} />
       </mesh>
 
-      {/* Center dashes — scrolling group */}
+      {/* Scrolling center dashes */}
       <group ref={markingsRef}>
-        {Array.from({ length: 20 }).map((_, i) => (
+        {Array.from({ length: 32 }).map((_, i) => (
           <mesh
             key={i}
             rotation={[-Math.PI / 2, 0, 0]}
-            position={[-38 + i * 4, -0.35, 0]}
+            position={[-62 + i * 4, -0.35, 0]}
             material={markingMat}
           >
-            <planeGeometry args={[1.8, 0.12]} />
+            <planeGeometry args={[2.0, 0.14]} />
           </mesh>
         ))}
       </group>
 
       {/* Edge lines */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.35, 2.6]} material={new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffffff', emissiveIntensity: 0.2 })}>
-        <planeGeometry args={[80, 0.08]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.348, 2.7]} material={edgeMat}>
+        <planeGeometry args={[120, 0.10]} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.35, -2.6]} material={new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffffff', emissiveIntensity: 0.2 })}>
-        <planeGeometry args={[80, 0.08]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.348, -2.7]} material={edgeMat}>
+        <planeGeometry args={[120, 0.10]} />
       </mesh>
 
-      {/* Ground plane (dark) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.37, 0]} receiveShadow>
-        <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial color="#0a0a0f" roughness={1} />
+      {/* Ground */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.38, 0]} receiveShadow material={groundMat}>
+        <planeGeometry args={[400, 400]} />
       </mesh>
     </group>
   );

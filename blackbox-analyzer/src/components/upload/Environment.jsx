@@ -1,87 +1,92 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-/** Streetlights + distant city glow + stars */
+/** Monochrome night environment — grey stars, grey streetlights */
 export default function Environment() {
   const starsRef = useRef();
 
   useFrame((_, delta) => {
-    // very slow star drift
-    if (starsRef.current) starsRef.current.rotation.y += delta * 0.002;
+    if (starsRef.current) starsRef.current.rotation.y += delta * 0.001;
   });
 
-  // Star positions
-  const starPositions = React.useMemo(() => {
+  const starPositions = useMemo(() => {
     const arr = [];
-    for (let i = 0; i < 300; i++) {
+    for (let i = 0; i < 400; i++) {
       arr.push(
-        (Math.random() - 0.5) * 200,
-        10 + Math.random() * 40,
-        (Math.random() - 0.5) * 200,
+        (Math.random() - 0.5) * 300,
+        12 + Math.random() * 50,
+        (Math.random() - 0.5) * 300,
       );
     }
     return new Float32Array(arr);
   }, []);
 
+  const poleMat  = useMemo(() => new THREE.MeshStandardMaterial({ color: '#222222', metalness: 0.5, roughness: 0.5 }), []);
+  const lampMat  = useMemo(() => new THREE.MeshStandardMaterial({ color: '#dddddd', emissive: '#dddddd', emissiveIntensity: 1.5 }), []);
+  const skyMat   = useMemo(() => new THREE.MeshBasicMaterial({ color: '#050505', side: THREE.BackSide }), []);
+
   return (
     <group>
-      {/* Stars */}
+      {/* Sky dome */}
+      <mesh material={skyMat}>
+        <sphereGeometry args={[180, 32, 16]} />
+      </mesh>
+
+      {/* Stars — grey/white */}
       <points ref={starsRef}>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[starPositions, 3]} />
         </bufferGeometry>
-        <pointsMaterial color="#aaccff" size={0.08} sizeAttenuation transparent opacity={0.7} />
+        <pointsMaterial color="#cccccc" size={0.07} sizeAttenuation transparent opacity={0.6} />
       </points>
 
-      {/* Ambient sky gradient — large sphere */}
-      <mesh>
-        <sphereGeometry args={[120, 32, 16]} />
-        <meshBasicMaterial color="#050810" side={THREE.BackSide} />
-      </mesh>
+      {/* Subtle ambient fill from above */}
+      <pointLight position={[0, 20, 0]} color="#aaaaaa" intensity={0.5} distance={60} decay={2} />
 
-      {/* Distant city glow on horizon */}
-      <pointLight position={[40, 2, -30]} color="#ff6600" intensity={2} distance={60} decay={2} />
-      <pointLight position={[-30, 2, -30]} color="#4466ff" intensity={1.5} distance={50} decay={2} />
-
-      {/* Streetlights along road */}
-      {[-24, -12, 0, 12, 24].map((x, i) => (
-        <group key={i} position={[x, 0, 3.8]}>
-          {/* Pole */}
-          <mesh>
-            <cylinderGeometry args={[0.04, 0.06, 4.5, 8]} />
-            <meshStandardMaterial color="#333344" metalness={0.6} roughness={0.4} />
+      {/* Streetlights — right side of road */}
+      {[-30, -18, -6, 6, 18, 30].map((x, i) => (
+        <group key={`r${i}`} position={[x, 0, 3.6]}>
+          <mesh material={poleMat} castShadow>
+            <cylinderGeometry args={[0.045, 0.065, 5.0, 8]} />
           </mesh>
           {/* Arm */}
-          <mesh position={[-0.5, 2.1, -0.5]} rotation={[0, 0, 0.3]}>
-            <cylinderGeometry args={[0.025, 0.025, 1.1, 6]} />
-            <meshStandardMaterial color="#333344" metalness={0.6} roughness={0.4} />
+          <mesh material={poleMat} position={[-0.55, 2.3, -0.55]} rotation={[0, 0, 0.28]}>
+            <cylinderGeometry args={[0.028, 0.028, 1.2, 6]} />
           </mesh>
-          {/* Lamp */}
-          <mesh position={[-0.9, 2.3, -0.5]}>
-            <boxGeometry args={[0.3, 0.12, 0.18]} />
-            <meshStandardMaterial color="#ffffcc" emissive="#ffffcc" emissiveIntensity={2} />
+          {/* Lamp housing */}
+          <mesh material={lampMat} position={[-1.0, 2.5, -0.55]}>
+            <boxGeometry args={[0.32, 0.14, 0.20]} />
           </mesh>
-          <pointLight position={[-0.9, 2.1, -0.5]} color="#ffe8a0" intensity={3} distance={10} decay={2} />
+          <pointLight
+            position={[-1.0, 2.3, -0.55]}
+            color="#cccccc"
+            intensity={4}
+            distance={12}
+            decay={2}
+          />
         </group>
       ))}
 
-      {/* Opposite side streetlights */}
-      {[-18, -6, 6, 18].map((x, i) => (
-        <group key={i} position={[x, 0, -3.8]}>
-          <mesh>
-            <cylinderGeometry args={[0.04, 0.06, 4.5, 8]} />
-            <meshStandardMaterial color="#333344" metalness={0.6} roughness={0.4} />
+      {/* Streetlights — left side */}
+      {[-24, -12, 0, 12, 24].map((x, i) => (
+        <group key={`l${i}`} position={[x, 0, -3.6]}>
+          <mesh material={poleMat} castShadow>
+            <cylinderGeometry args={[0.045, 0.065, 5.0, 8]} />
           </mesh>
-          <mesh position={[0.5, 2.1, 0.5]} rotation={[0, 0, -0.3]}>
-            <cylinderGeometry args={[0.025, 0.025, 1.1, 6]} />
-            <meshStandardMaterial color="#333344" metalness={0.6} roughness={0.4} />
+          <mesh material={poleMat} position={[0.55, 2.3, 0.55]} rotation={[0, 0, -0.28]}>
+            <cylinderGeometry args={[0.028, 0.028, 1.2, 6]} />
           </mesh>
-          <mesh position={[0.9, 2.3, 0.5]}>
-            <boxGeometry args={[0.3, 0.12, 0.18]} />
-            <meshStandardMaterial color="#ffffcc" emissive="#ffffcc" emissiveIntensity={2} />
+          <mesh material={lampMat} position={[1.0, 2.5, 0.55]}>
+            <boxGeometry args={[0.32, 0.14, 0.20]} />
           </mesh>
-          <pointLight position={[0.9, 2.1, 0.5]} color="#ffe8a0" intensity={2} distance={8} decay={2} />
+          <pointLight
+            position={[1.0, 2.3, 0.55]}
+            color="#bbbbbb"
+            intensity={3}
+            distance={10}
+            decay={2}
+          />
         </group>
       ))}
     </group>
