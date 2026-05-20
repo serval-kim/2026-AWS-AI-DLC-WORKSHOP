@@ -278,7 +278,7 @@ function AnalyzingScreen({ file, onComplete }) {
         animate={{ y: 0, opacity: 1 }}
         transition={{ ...EASE_OUT, delay: 0.2 }}
         style={{
-          position: 'absolute', bottom: 44, left: '50%', transform: 'translateX(-50%)',
+          position: 'absolute', bottom: 44, left: '40%', transform: 'translateX(-50%)',
           textAlign: 'center', minWidth: 360,
         }}
       >

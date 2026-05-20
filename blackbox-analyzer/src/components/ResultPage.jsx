@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 
 const FONT = "'DungGeunMo', sans-serif";
 
@@ -488,8 +488,8 @@ export default function ResultPage({ file, analysisResult, onReset }) {
           {tabs.map((t) => (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
-              style={S.tab(tab === t.id)}
+              onClick={() => setActiveTab(t.id)}
+              style={S.tab(activeTab === t.id)}
             >
               {t.label}
             </button>
@@ -497,8 +497,8 @@ export default function ResultPage({ file, analysisResult, onReset }) {
         </div>
 
         {/* Tab content */}
-        <div key={tab} style={{ animation: "fadeIn 0.3s ease" }}>
-          {tab === "fault" && (
+        <div key={activeTab} style={{ animation: "fadeIn 0.3s ease" }}>
+          {activeTab === "fault" && (
             <div style={S.card}>
               <p style={{ fontSize: 11, color: "#54565c", marginBottom: 16 }}>
                 {MOCK.precedent}
@@ -507,7 +507,7 @@ export default function ResultPage({ file, analysisResult, onReset }) {
             </div>
           )}
 
-          {tab === "timeline" && (
+          {activeTab === "timeline" && (
             <div style={S.card}>
               <div style={{ position: "relative", paddingLeft: 28 }}>
                 <div
@@ -560,7 +560,7 @@ export default function ResultPage({ file, analysisResult, onReset }) {
             </div>
           )}
 
-          {tab === "script" && (
+          {activeTab === "script" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {[
                 {
