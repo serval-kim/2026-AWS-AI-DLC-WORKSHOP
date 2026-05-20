@@ -172,3 +172,11 @@
 **Context**: CONSTRUCTION - Build and Test. E2E verification passed. Ready to finalize.
 
 ---
+
+## Code Generation — RAG Integration Change
+**Timestamp**: 2026-05-20T01:10:00Z
+**User Input**: "ad-hoc/serval 내의 FaultAnalyzer가 rag 서치하는 파트를, ad-hoc/andy/accident-rag 내의 산출물로 대체하려고 해"
+**AI Response**: Analyzing accident-rag package. Will replace FaultAnalyzer.search_references() with accident_rag.answer_query() integration. The accident-rag package provides: PDF→OpenSearch ingest, Titan V2 embeddings, k-NN search, and LLM verdict generation via Converse API.
+**Context**: CONSTRUCTION - Code Generation modification. Integrating external RAG module.
+
+---

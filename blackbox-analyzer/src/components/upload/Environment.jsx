@@ -1,94 +1,62 @@
-import React, { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
+import React, { useMemo } from 'react';
 import * as THREE from 'three';
 
-/** Monochrome night environment — grey stars, grey streetlights */
+/** Minimal wire environment — just horizon grid + sparse stars */
 export default function Environment() {
-  const starsRef = useRef();
+  // Horizon grid (perspective grid receding into distance)
+  const horizonGrid = useMemo(() => {
+    const pts = [];
+    // Converging lines toward vanishing point
+    for (let i = -6; i <= 6; i++) {
+      pts.push(i * 3, -0.36, -4,   i * 40, -0.36, -80);
+      pts.push(i * 3, -0.36,  4,   i * 40, -0.36,  80);
+    }
+    // Cross lines
+    for (let d = 1; d <= 10; d++) {
+      const z = -d * 8;
+      const w = d * 18;
+      pts.push(-w, -0.36, z,  w, -0.36, z);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    return g;
+  }, []);
 
-  useFrame((_, delta) => {
-    if (starsRef.current) starsRef.current.rotation.y += delta * 0.001;
-  });
-
-  const starPositions = useMemo(() => {
-    const arr = [];
-    for (let i = 0; i < 400; i++) {
-      arr.push(
+  // Star field
+  const starGeo = useMemo(() => {
+    const pts = [];
+    for (let i = 0; i < 300; i++) {
+      pts.push(
         (Math.random() - 0.5) * 300,
-        12 + Math.random() * 50,
+        8 + Math.random() * 50,
         (Math.random() - 0.5) * 300,
       );
     }
-    return new Float32Array(arr);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    return g;
   }, []);
-
-  const poleMat  = useMemo(() => new THREE.MeshStandardMaterial({ color: '#222222', metalness: 0.5, roughness: 0.5 }), []);
-  const lampMat  = useMemo(() => new THREE.MeshStandardMaterial({ color: '#dddddd', emissive: '#dddddd', emissiveIntensity: 1.5 }), []);
-  const skyMat   = useMemo(() => new THREE.MeshBasicMaterial({ color: '#050505', side: THREE.BackSide }), []);
 
   return (
     <group>
-      {/* Sky dome */}
-      <mesh material={skyMat}>
-        <sphereGeometry args={[180, 32, 16]} />
+      {/* Sky — pure black */}
+      <mesh>
+        <sphereGeometry args={[200, 16, 8]} />
+        <meshBasicMaterial color="#000000" side={THREE.BackSide} />
       </mesh>
 
-      {/* Stars — grey/white */}
-      <points ref={starsRef}>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" args={[starPositions, 3]} />
-        </bufferGeometry>
-        <pointsMaterial color="#cccccc" size={0.07} sizeAttenuation transparent opacity={0.6} />
+      {/* Stars */}
+      <points geometry={starGeo}>
+        <pointsMaterial color="#00aacc" size={0.06} sizeAttenuation transparent opacity={0.5} />
       </points>
 
-      {/* Subtle ambient fill from above */}
-      <pointLight position={[0, 20, 0]} color="#aaaaaa" intensity={0.5} distance={60} decay={2} />
+      {/* Horizon perspective grid */}
+      <lineSegments geometry={horizonGrid}>
+        <lineBasicMaterial color="#002233" transparent opacity={0.35} />
+      </lineSegments>
 
-      {/* Streetlights — right side of road */}
-      {[-30, -18, -6, 6, 18, 30].map((x, i) => (
-        <group key={`r${i}`} position={[x, 0, 3.6]}>
-          <mesh material={poleMat} castShadow>
-            <cylinderGeometry args={[0.045, 0.065, 5.0, 8]} />
-          </mesh>
-          {/* Arm */}
-          <mesh material={poleMat} position={[-0.55, 2.3, -0.55]} rotation={[0, 0, 0.28]}>
-            <cylinderGeometry args={[0.028, 0.028, 1.2, 6]} />
-          </mesh>
-          {/* Lamp housing */}
-          <mesh material={lampMat} position={[-1.0, 2.5, -0.55]}>
-            <boxGeometry args={[0.32, 0.14, 0.20]} />
-          </mesh>
-          <pointLight
-            position={[-1.0, 2.3, -0.55]}
-            color="#cccccc"
-            intensity={4}
-            distance={12}
-            decay={2}
-          />
-        </group>
-      ))}
-
-      {/* Streetlights — left side */}
-      {[-24, -12, 0, 12, 24].map((x, i) => (
-        <group key={`l${i}`} position={[x, 0, -3.6]}>
-          <mesh material={poleMat} castShadow>
-            <cylinderGeometry args={[0.045, 0.065, 5.0, 8]} />
-          </mesh>
-          <mesh material={poleMat} position={[0.55, 2.3, 0.55]} rotation={[0, 0, -0.28]}>
-            <cylinderGeometry args={[0.028, 0.028, 1.2, 6]} />
-          </mesh>
-          <mesh material={lampMat} position={[1.0, 2.5, 0.55]}>
-            <boxGeometry args={[0.32, 0.14, 0.20]} />
-          </mesh>
-          <pointLight
-            position={[1.0, 2.3, 0.55]}
-            color="#bbbbbb"
-            intensity={3}
-            distance={10}
-            decay={2}
-          />
-        </group>
-      ))}
+      {/* Subtle ambient — just enough to see lines */}
+      <ambientLight intensity={0.02} color="#00e5ff" />
     </group>
   );
 }

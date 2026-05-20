@@ -47,7 +47,7 @@ class Settings(BaseSettings):
 
     # RAG
     rag_top_k: int = 5
-    rag_min_score: float = 0.7
+    rag_min_score: float = 0.5
 
     # Pipeline
     llm_max_retries: int = 2

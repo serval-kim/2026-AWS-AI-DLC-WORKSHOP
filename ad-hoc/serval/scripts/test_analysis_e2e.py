@@ -162,25 +162,19 @@ def run_fault_analysis(video_analysis):
 
     analyzer = FaultAnalyzer()
 
-    # RAG search
-    print("\n🔎 Searching legal references (OpenSearch RAG)...")
-    try:
-        references = analyzer.search_references(video_analysis)
-        print(f"   ✅ {len(references)} references found")
-        for ref in references[:3]:
-            print(f"      - [{ref.category}] {ref.source} (score: {ref.relevance_score:.2f})")
-    except Exception as e:
-        print(f"   ⚠️  RAG search failed: {e}")
-        print("   → Proceeding without RAG context")
-        references = []
-
-    # LLM fault analysis
-    print("\n🤖 Invoking LLM for fault ratio analysis (Extended Thinking)...")
+    print("\n🔎 Running fault analysis (RAG search + LLM verdict)...")
     start = time.time()
     try:
-        fault_result = analyzer.analyze_fault(video_analysis, references)
+        fault_result = analyzer.run(video_analysis)
         elapsed = time.time() - start
         print(f"   ✅ Fault analysis complete in {elapsed:.1f}s")
+
+        if fault_result.references:
+            print(f"   📚 {len(fault_result.references)} legal references found")
+            for ref in fault_result.references[:3]:
+                print(f"      - [{ref.category}] {ref.source} (score: {ref.relevance_score:.2f})")
+        else:
+            print("   📚 No legal references (OpenSearch empty or unavailable)")
 
         if fault_result.undetermined:
             print(f"   ⚠️  Undetermined: {fault_result.undetermined_reason}")
@@ -193,7 +187,6 @@ def run_fault_analysis(video_analysis):
                     print(f"        과실: {', '.join(ratio.key_faults)}")
             print(f"\n   📝 Reasoning: {fault_result.reasoning[:200]}...")
 
-        fault_result.references = references
         return fault_result
 
     except Exception as e:

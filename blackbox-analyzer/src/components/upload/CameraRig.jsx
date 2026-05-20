@@ -3,88 +3,116 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
 /**
- * Camera rig:
- *  'driving'  → follows car from the side (Z offset), car fills left half of frame
- *  'zooming'  → smooth dolly into blackbox POV inside windshield
- *  'interior' → locked to blackbox camera
+ * Camera behaviour:
+ *
+ *  'driving'  → pure side view: camera at (carX, 1.2, 9), looking at (carX, 0.5, 0)
+ *               Z=9 gives a true orthographic-like side profile.
+ *               After ZOOM_DELAY ms, automatically starts zooming.
+ *
+ *  'zooming'  → smooth dolly from side position into blackbox POV inside windshield.
+ *               Car keeps moving during zoom.
+ *
+ *  'interior' → camera locked to blackbox position, car stops, overlay appears.
  */
 export default function CameraRig({ phase, carPosRef }) {
   const { camera } = useThree();
-  const progress = useRef(0);
-  const startPos = useRef(new THREE.Vector3());
-  const startTarget = useRef(new THREE.Vector3());
-  const currentTarget = useRef(new THREE.Vector3());
 
-  // Side-view offset from car: slightly behind, elevated, far to the side
-  // Camera sits at car.x + SIDE_X, car.y + SIDE_Y, SIDE_Z
-  const SIDE_X   =  1.5;   // slightly ahead of car center
-  const SIDE_Y   =  1.4;   // eye-level height
-  const SIDE_Z   =  7.0;   // distance to the side (Z axis)
+  // Zoom animation state
+  const zoomProgress = useRef(0);
+  const zoomStartPos = useRef(new THREE.Vector3());
+  const zoomStartTarget = useRef(new THREE.Vector3());
+  const lerpTarget = useRef(new THREE.Vector3());
 
-  // Interior blackbox position (relative to car origin)
-  const BB_LOCAL_POS    = new THREE.Vector3(0.55, 0.72, 0.1);
-  const BB_LOCAL_TARGET = new THREE.Vector3(8, 0.72, 0);
+  // Blackbox position relative to car origin
+  // gltf car is rotated -90° Y, so gltf's +Z (front) → world -X (left)
+  // Dashboard in gltf: ~(0.11, 0.85, 0.54) in gltf local → after -90°Y rotation:
+  //   world_x = gltf_z * -1 = -0.54  (relative to car center)
+  //   world_y = gltf_y      =  0.85
+  //   world_z = gltf_x      =  0.11
+  // Blackbox cam sits on windshield top-center
+  const BB_OFFSET_POS  = new THREE.Vector3(-0.3,  0.85,  0.05);  // relative to car X
+  const BB_OFFSET_LOOK = new THREE.Vector3(-12,   0.85,  0.05);  // looking forward (-X)
+
+  // Side-view constants
+  const SIDE_Z   = 9.0;   // true side — Z axis distance
+  const SIDE_Y   = 1.2;   // slightly above wheel axle
+  const LOOK_Y   = 0.55;  // look at car body center height
 
   useEffect(() => {
     if (phase === 'driving') {
-      camera.fov = 55;
+      const cx = carPosRef.current;
+      camera.position.set(cx, SIDE_Y, SIDE_Z);
+      camera.lookAt(cx, LOOK_Y, 0);
+      camera.fov = 42;   // narrower FOV = more telephoto, car fills frame
       camera.updateProjectionMatrix();
     }
+
     if (phase === 'zooming') {
-      progress.current = 0;
-      startPos.current.copy(camera.position);
-      // capture current look-at target
-      const carX = carPosRef?.current ?? 0;
-      startTarget.current.set(carX, SIDE_Y * 0.5, 0);
+      zoomProgress.current = 0;
+      zoomStartPos.current.copy(camera.position);
+      const cx = carPosRef.current;
+      zoomStartTarget.current.set(cx, LOOK_Y, 0);
     }
   }, [phase]);
 
   useFrame((_, delta) => {
-    const carX = carPosRef?.current ?? 0;
+    const carX = carPosRef.current ?? 0;
 
+    // ── DRIVING: pure side follow ──────────────────────────────────────────
     if (phase === 'driving') {
-      // Follow car: camera X tracks car X with a slight lag
-      const targetCamX = carX + SIDE_X;
-      camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, 0.08);
+      // Snap X to car with very tight lag (feels like tracking shot)
+      camera.position.x = THREE.MathUtils.lerp(camera.position.x, carX, 0.12);
       camera.position.y = SIDE_Y;
       camera.position.z = SIDE_Z;
-
-      // Look at car center
-      const lookTarget = new THREE.Vector3(carX, 0.5, 0);
-      camera.lookAt(lookTarget);
+      camera.lookAt(carX, LOOK_Y, 0);
     }
 
+    // ── ZOOMING: dolly into blackbox ───────────────────────────────────────
     if (phase === 'zooming') {
-      progress.current = Math.min(progress.current + delta * 0.5, 1);
-      // Ease in-out cubic
-      const t = progress.current < 0.5
-        ? 4 * progress.current ** 3
-        : 1 - (-2 * progress.current + 2) ** 3 / 2;
+      zoomProgress.current = Math.min(zoomProgress.current + delta * 0.48, 1);
 
-      // Interior target is relative to car position
-      const interiorPos = new THREE.Vector3(
-        carX + BB_LOCAL_POS.x,
-        BB_LOCAL_POS.y,
-        BB_LOCAL_POS.z,
+      // Ease-in-out cubic
+      const p = zoomProgress.current;
+      const t = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+
+      // Target position moves with car
+      const bbWorldPos = new THREE.Vector3(
+        carX + BB_OFFSET_POS.x,
+        BB_OFFSET_POS.y,
+        BB_OFFSET_POS.z,
       );
-      const interiorTarget = new THREE.Vector3(
-        carX + BB_LOCAL_TARGET.x,
-        BB_LOCAL_TARGET.y,
-        BB_LOCAL_TARGET.z,
+      const bbWorldLook = new THREE.Vector3(
+        carX + BB_OFFSET_LOOK.x,
+        BB_OFFSET_LOOK.y,
+        BB_OFFSET_LOOK.z,
       );
 
-      camera.position.lerpVectors(startPos.current, interiorPos, t);
-      currentTarget.current.lerpVectors(startTarget.current, interiorTarget, t);
-      camera.lookAt(currentTarget.current);
-      camera.fov = THREE.MathUtils.lerp(55, 72, t);
+      // Also update start target to keep tracking car during zoom
+      zoomStartTarget.current.set(carX, LOOK_Y, 0);
+
+      camera.position.lerpVectors(zoomStartPos.current, bbWorldPos, t);
+      lerpTarget.current.lerpVectors(zoomStartTarget.current, bbWorldLook, t);
+      camera.lookAt(lerpTarget.current);
+
+      // FOV widens slightly as we go inside (fisheye feel)
+      camera.fov = THREE.MathUtils.lerp(42, 70, t);
       camera.updateProjectionMatrix();
     }
 
+    // ── INTERIOR: locked, car stopped ─────────────────────────────────────
     if (phase === 'interior') {
-      const carX2 = carPosRef?.current ?? 0;
-      camera.position.set(carX2 + BB_LOCAL_POS.x, BB_LOCAL_POS.y, BB_LOCAL_POS.z);
-      camera.lookAt(carX2 + BB_LOCAL_TARGET.x, BB_LOCAL_TARGET.y, BB_LOCAL_TARGET.z);
-      camera.fov = 72;
+      // carX is frozen by MovingCar when phase === 'interior'
+      camera.position.set(
+        carX + BB_OFFSET_POS.x,
+        BB_OFFSET_POS.y,
+        BB_OFFSET_POS.z,
+      );
+      camera.lookAt(
+        carX + BB_OFFSET_LOOK.x,
+        BB_OFFSET_LOOK.y,
+        BB_OFFSET_LOOK.z,
+      );
+      camera.fov = 70;
       camera.updateProjectionMatrix();
     }
   });
