@@ -1,31 +1,51 @@
 import React, { useState, useEffect, useRef } from 'react';
 import VideoTemplate from './VideoTemplate';
 import VideoEngine from './VideoEngine';
-import MUNCHEOL_SCRIPT from '../assets/muncheol-script-oneshot.json';
 
-const MOCK_RESULT = {
-  analysisId: 'ANA-2026-0520-7842',
-  accidentType: '끼어들기 후 추돌',
-  timestamp: '2026-05-20T14:32:11Z',
-  fault: { a: 70, b: 30 },
-  faultLabel: { a: '상대 차량 (끼어들기)', b: '내 차량 (블랙박스)' },
-  verdict: '7:3',
-  laws: ['도로교통법 제19조 (안전거리 확보)', '도로교통법 제23조 (끼어들기 금지)'],
-  precedent: '대법원 2023다45821 유사 판례',
-  timeline: [
-    { time: '00:02', event: '상대 차량 1차선 진입 시도' },
-    { time: '00:04', event: '방향지시등 없이 차선 변경' },
-    { time: '00:06', event: '충돌 발생' },
-    { time: '00:08', event: '양 차량 정차' },
-  ],
-  script: {
-    intro: '자, 보시죠. 이 영상 한번 보겠습니다.',
-    analysis: '상대방 차량이 방향지시등도 켜지 않고 갑자기 끼어들었습니다. 이건 명백한 끼어들기 위반이에요.',
-    conclusion: '제 판단은 이렇습니다. 7대 3. 끼어든 차량이 7, 당한 차량이 3입니다.',
-  },
-};
 
-function FaultChart({ a, b }) {
+function _formatTime(sec) {
+  if (sec == null) return '00:00';
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+
+function deriveResult(analysisResult) {
+  if (!analysisResult) return null;
+  const sa = analysisResult.structuredAnalysis;
+  const sc = analysisResult.script?.script;
+  if (!sa && !sc) return null;
+
+  const ratios = sa?.conclusion?.fault_ratios || [];
+  const a = ratios[0]?.ratio_percent ?? 0;
+  const b = ratios[1]?.ratio_percent ?? Math.max(0, 100 - a);
+
+  const timeline = (sa?.analysis?.driver_actions || []).map(da => ({
+    time: _formatTime(da.timestamp?.start ?? 0),
+    event: `차량${da.vehicle_id ?? '?'} — ${da.action ?? ''}`,
+  }));
+
+  return {
+    analysisId: sa?.job_id ?? analysisResult.script?.job_id ?? '-',
+    accidentType: sa?.intro?.accident_type ?? sa?.intro?.summary ?? '사고 분석',
+    fault: { a, b },
+    faultLabel: {
+      a: `차량 ${ratios[0]?.vehicle_id ?? 'A'}`,
+      b: `차량 ${ratios[1]?.vehicle_id ?? 'B'}`,
+    },
+    verdict: `${a}:${b}`,
+    laws: sa?.conclusion?.legal_basis || [],
+    precedent: sa?.conclusion?.disclaimer ?? '',
+    timeline,
+    script: {
+      intro: sc?.intro?.text ?? '',
+      analysis: sc?.analysis?.text ?? '',
+      conclusion: sc?.conclusion?.text ?? '',
+    },
+  };
+}
+
+function FaultChart({ a, b, labelA, labelB }) {
   const [animated, setAnimated] = useState(false);
   useEffect(() => { setTimeout(() => setAnimated(true), 300); }, []);
 
@@ -70,7 +90,7 @@ function FaultChart({ a, b }) {
             animation: animated ? 'count-up 0.6s ease' : 'none',
           }}>{a}%</div>
           <div style={{ color: '#fca5a5', fontSize: '12px', fontWeight: '600', marginTop: '4px' }}>
-            {MOCK_RESULT.faultLabel.a}
+            {labelA}
           </div>
         </div>
         <div style={{
@@ -85,7 +105,7 @@ function FaultChart({ a, b }) {
             animation: animated ? 'count-up 0.6s ease 0.2s both' : 'none',
           }}>{b}%</div>
           <div style={{ color: '#93c5fd', fontSize: '12px', fontWeight: '600', marginTop: '4px' }}>
-            {MOCK_RESULT.faultLabel.b}
+            {labelB}
           </div>
         </div>
       </div>
@@ -93,180 +113,40 @@ function FaultChart({ a, b }) {
   );
 }
 
-function ReelsPlayer() {
-  const [playing, setPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [currentLine, setCurrentLine] = useState(0);
-  const intervalRef = useRef(null);
-
-  const lines = [
-    MOCK_RESULT.script.intro,
-    MOCK_RESULT.script.analysis,
-    MOCK_RESULT.script.conclusion,
-  ];
-
-  function togglePlay() {
-    if (playing) {
-      clearInterval(intervalRef.current);
-      setPlaying(false);
-    } else {
-      setPlaying(true);
-      intervalRef.current = setInterval(() => {
-        setProgress(p => {
-          if (p >= 100) {
-            clearInterval(intervalRef.current);
-            setPlaying(false);
-            return 100;
-          }
-          setCurrentLine(Math.floor((p / 100) * lines.length));
-          return p + 0.5;
-        });
-      }, 150);
-    }
-  }
-
-  useEffect(() => () => clearInterval(intervalRef.current), []);
-
-  return (
-    <div style={{
-      background: '#000',
-      borderRadius: '16px',
-      overflow: 'hidden',
-      aspectRatio: '9/16',
-      maxWidth: '240px',
-      margin: '0 auto',
-      position: 'relative',
-      border: '1px solid #1e2d4a',
-    }}>
-      {/* Video background */}
-      <div style={{
-        width: '100%', height: '100%',
-        background: 'linear-gradient(180deg, #1a2a1a 0%, #2d3a1a 40%, #3a3020 60%, #1a1a2a 100%)',
-        position: 'relative',
-        display: 'flex', flexDirection: 'column',
-        justifyContent: 'flex-end',
-      }}>
-        {/* Mock road scene */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(180deg, #0a1a0a 0%, #1a2a10 50%, #2a2010 100%)',
-        }}>
-          <div style={{
-            position: 'absolute', bottom: '30%', left: '50%', transform: 'translateX(-50%)',
-            width: '50%', height: '30%',
-            background: '#1a1a1a',
-            clipPath: 'polygon(15% 0%, 85% 0%, 100% 100%, 0% 100%)',
-          }} />
-          <div style={{
-            position: 'absolute', bottom: '35%', left: '44%',
-            width: '10%', height: '8%',
-            background: '#ef4444',
-            borderRadius: '2px',
-          }} />
-          <div style={{
-            position: 'absolute', bottom: '43%', left: '47%',
-            width: '8%', height: '6%',
-            background: '#3b82f6',
-            borderRadius: '2px',
-          }} />
-        </div>
-
-        {/* Watermark */}
-        <div style={{
-          position: 'absolute', top: '12px', right: '12px',
-          background: '#00000088',
-          borderRadius: '4px', padding: '3px 8px',
-          fontSize: '9px', color: '#ffffff88', fontWeight: '600',
-        }}>
-          AI 분석 결과 - 참고용
-        </div>
-
-        {/* Verdict overlay */}
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%, -50%)',
-          textAlign: 'center',
-          opacity: playing && progress > 60 ? 1 : 0,
-          transition: 'opacity 0.5s ease',
-        }}>
-          <div style={{
-            fontSize: '48px', fontWeight: '900',
-            background: 'linear-gradient(90deg, #ef4444, #f97316)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            textShadow: 'none',
-          }}>7:3</div>
-          <div style={{ color: '#fca5a5', fontSize: '11px', fontWeight: '700' }}>과실비율</div>
-        </div>
-
-        {/* Subtitle */}
-        <div style={{
-          position: 'relative', zIndex: 2,
-          padding: '12px',
-          background: 'linear-gradient(0deg, #000000cc, transparent)',
-        }}>
-          {playing && (
-            <div style={{
-              background: '#000000bb',
-              borderRadius: '6px',
-              padding: '8px 10px',
-              marginBottom: '8px',
-              animation: 'fadeIn 0.3s ease',
-            }}>
-              <p style={{ color: '#fff', fontSize: '11px', lineHeight: '1.5', textAlign: 'center' }}>
-                {lines[currentLine]}
-              </p>
-            </div>
-          )}
-
-          {/* Progress bar */}
-          <div style={{ background: '#ffffff33', borderRadius: '100px', height: '3px', marginBottom: '10px' }}>
-            <div style={{
-              height: '100%', width: `${progress}%`,
-              background: '#fff', borderRadius: '100px',
-              transition: 'width 0.1s linear',
-            }} />
-          </div>
-
-          {/* Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
-            <button
-              onClick={togglePlay}
-              style={{
-                width: '40px', height: '40px',
-                background: 'rgba(255,255,255,0.2)',
-                border: '2px solid rgba(255,255,255,0.5)',
-                borderRadius: '50%',
-                color: '#fff', fontSize: '16px',
-                cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                backdropFilter: 'blur(4px)',
-              }}
-            >
-              {playing ? '⏸' : '▶'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function ResultPage({ file, analysisResult, onReset }) {
   const [activeTab, setActiveTab] = useState('fault');
   const [liveSubtitle, setLiveSubtitle] = useState('');
 
+  const result = React.useMemo(() => deriveResult(analysisResult), [analysisResult]);
+
   // file prop이 File 객체면 Object URL 생성, 없으면 fallback
   const videoSrc = React.useMemo(() => {
     if (file instanceof File) return URL.createObjectURL(file);
-    return '/bb_h264.mp4'; // 개발용 fallback
+    return '/bb_h264.mp4';
   }, [file]);
 
-  // 컴포넌트 언마운트 시 Object URL 해제 (메모리 누수 방지)
   React.useEffect(() => {
     return () => {
       if (file instanceof File) URL.revokeObjectURL(videoSrc);
     };
   }, [videoSrc]);
+
+  if (!result) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0a0e1a 0%, #0f1629 100%)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#94a3b8', fontSize: '14px',
+      }}>
+        분석 결과가 없습니다.
+        <button onClick={onReset} style={{ marginLeft: 16, padding: '6px 14px', background: 'transparent', border: '1px solid #2d4a7a', borderRadius: 8, color: '#3b82f6', cursor: 'pointer' }}>
+          다시 시도
+        </button>
+      </div>
+    );
+  }
 
   const tabs = [
     { id: 'fault', label: '과실비율', icon: '⚖️' },
@@ -297,7 +177,7 @@ export default function ResultPage({ file, analysisResult, onReset }) {
             <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#f1f5f9' }}>
               사고 분석 결과
             </h2>
-            <p style={{ color: '#475569', fontSize: '12px' }}>ID: {MOCK_RESULT.analysisId}</p>
+            <p style={{ color: '#475569', fontSize: '12px' }}>ID: {result.analysisId}</p>
           </div>
           <button
             onClick={onReset}
@@ -333,7 +213,7 @@ export default function ResultPage({ file, analysisResult, onReset }) {
         }}>
           <div>
             <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>사고 유형</p>
-            <p style={{ color: '#f1f5f9', fontSize: '18px', fontWeight: '700' }}>{MOCK_RESULT.accidentType}</p>
+            <p style={{ color: '#f1f5f9', fontSize: '18px', fontWeight: '700' }}>{result.accidentType}</p>
           </div>
           <div style={{ textAlign: 'center' }}>
             <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>AI 판결</p>
@@ -341,11 +221,11 @@ export default function ResultPage({ file, analysisResult, onReset }) {
               fontSize: '40px', fontWeight: '900',
               background: 'linear-gradient(90deg, #ef4444, #f97316)',
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            }}>{MOCK_RESULT.verdict}</div>
+            }}>{result.verdict}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '4px' }}>관련 법규</p>
-            {MOCK_RESULT.laws.map(l => (
+            {result.laws.map(l => (
               <p key={l} style={{ color: '#3b82f6', fontSize: '12px' }}>• {l}</p>
             ))}
           </div>
@@ -404,10 +284,10 @@ export default function ResultPage({ file, analysisResult, onReset }) {
               <div style={{ padding: '20px 24px', borderBottom: '1px solid #1e2d4a' }}>
                 <h3 style={{ color: '#f1f5f9', fontSize: '16px', fontWeight: '700' }}>과실비율 분석</h3>
                 <p style={{ color: '#475569', fontSize: '12px', marginTop: '4px' }}>
-                  {MOCK_RESULT.precedent}
+                  {result.precedent}
                 </p>
               </div>
-              <FaultChart a={MOCK_RESULT.fault.a} b={MOCK_RESULT.fault.b} />
+              <FaultChart a={result.fault.a} b={result.fault.b} labelA={result.faultLabel.a} labelB={result.faultLabel.b} />
             </div>
           )}
 
@@ -426,7 +306,7 @@ export default function ResultPage({ file, analysisResult, onReset }) {
                   position: 'absolute', left: '20px', top: 0, bottom: 0,
                   width: '2px', background: 'linear-gradient(180deg, #3b82f6, #06b6d4)',
                 }} />
-                {MOCK_RESULT.timeline.map((item, i) => (
+                {result.timeline.map((item, i) => (
                   <div key={i} style={{
                     display: 'flex', alignItems: 'flex-start', gap: '16px',
                     marginBottom: '20px',
@@ -475,9 +355,9 @@ export default function ResultPage({ file, analysisResult, onReset }) {
                 🗣️ 한문철 스타일 스크립트
               </h3>
               {[
-                { label: '도입부', color: '#3b82f6', text: MOCK_RESULT.script.intro, time: '00:00 ~ 00:10' },
-                { label: '분석부', color: '#f59e0b', text: MOCK_RESULT.script.analysis, time: '00:10 ~ 00:45' },
-                { label: '결론부', color: '#ef4444', text: MOCK_RESULT.script.conclusion, time: '00:45 ~ 01:00' },
+                { label: '도입부', color: '#3b82f6', text: result.script.intro, time: '00:00 ~ 00:10' },
+                { label: '분석부', color: '#f59e0b', text: result.script.analysis, time: '00:10 ~ 00:45' },
+                { label: '결론부', color: '#ef4444', text: result.script.conclusion, time: '00:45 ~ 01:00' },
               ].map((s, i) => (
                 <div key={i} style={{
                   background: '#0a0e1a',
@@ -522,16 +402,16 @@ export default function ResultPage({ file, analysisResult, onReset }) {
                 {/* VideoTemplate + VideoEngine 통합 */}
                 <div style={{ display: 'flex', justifyContent: 'center' }}>
                   <VideoTemplate
-                    titleLine1={MOCK_RESULT.accidentType.split(' ')[0]}
-                    titleLine2={MOCK_RESULT.accidentType.split(' ').slice(1).join(' ') || '사고 분석'}
-                    subtitle={liveSubtitle || MOCK_RESULT.script.conclusion}
+                    titleLine1={result.accidentType.split(' ')[0]}
+                    titleLine2={result.accidentType.split(' ').slice(1).join(' ') || '사고 분석'}
+                    subtitle={liveSubtitle || result.script.conclusion}
                     subtitleLabel="AI 판결"
                     scale={0.28}
                     style={{ borderRadius: 8, overflow: 'hidden', boxShadow: '0 0 24px rgba(0,194,255,.25)' }}
                     videoContent={
                       <VideoEngine
                         src={videoSrc}
-                        script={analysisResult?.script || MUNCHEOL_SCRIPT}
+                        script={analysisResult?.script}
                         showSubtitle={false}
                         onSubtitleChange={setLiveSubtitle}
                         style={{ width: '100%', height: '100%' }}

@@ -21,42 +21,66 @@ export default function AnalyzingPage({ file, onComplete }) {
   const [detections, setDetections] = useState([]);
   const jobRef = React.useRef(null);
 
-  // API 호출: 분석 시작 + 폴링
+  // API 호출: 업로드 → 분석 시작 → 폴링
+  const [apiError, setApiError] = useState(null);
   useEffect(() => {
-    const API = 'http://localhost:8000';
+    const API = 'http://localhost:8001';
     let polling = null;
+    let cancelled = false;
 
-    fetch(`${API}/analyze`, { method: 'POST' })
-      .then(r => r.json())
-      .then(data => {
-        jobRef.current = data.job_id;
-        polling = setInterval(() => {
-          fetch(`${API}/jobs/${jobRef.current}`)
-            .then(r => r.json())
-            .then(job => {
-              if (job.status === 'completed') {
-                clearInterval(polling);
-                // API 결과를 onComplete로 전달
-                onComplete({
-                  script: job.script,
-                  videoUrl: `${API}${job.videoUrl}`,
-                  audioUrls: job.audioUrls ? {
-                    intro: `${API}${job.audioUrls.intro}`,
-                    analysis: `${API}${job.audioUrls.analysis}`,
-                    conclusion: `${API}${job.audioUrls.conclusion}`,
-                  } : null,
-                });
-              }
-            });
-        }, 2000);
-      })
-      .catch(() => {
-        // API 실패 시 기존 mock 동작으로 fallback
-        setTimeout(() => onComplete(null), 18000);
+    async function run() {
+      if (!file) {
+        setApiError('업로드된 파일이 없습니다.');
+        return;
+      }
+
+      // 1) /upload (multipart) → video_s3_key
+      const form = new FormData();
+      form.append('file', file);
+      const upRes = await fetch(`${API}/upload`, { method: 'POST', body: form });
+      if (!upRes.ok) throw new Error(`upload 실패: ${upRes.status}`);
+      const { video_s3_key } = await upRes.json();
+
+      // 2) /analyze
+      const anRes = await fetch(`${API}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ video_s3_key, mode: 'parallel' }),
       });
+      if (!anRes.ok) throw new Error(`analyze 실패: ${anRes.status}`);
+      const { job_id } = await anRes.json();
+      jobRef.current = job_id;
 
-    return () => { if (polling) clearInterval(polling); };
-  }, []);
+      // 3) /jobs/{id} 폴링
+      polling = setInterval(async () => {
+        if (cancelled) return;
+        const jr = await fetch(`${API}/jobs/${job_id}`);
+        const job = await jr.json();
+        if (job.status === 'completed') {
+          clearInterval(polling);
+          onComplete({
+            script: job.script,
+            structuredAnalysis: job.structured_analysis,
+            videoUrl: job.videoUrl ? `${API}${job.videoUrl}` : null,
+            audioUrls: job.audioUrls ? {
+              intro: `${API}${job.audioUrls.intro}`,
+              analysis: `${API}${job.audioUrls.analysis}`,
+              conclusion: `${API}${job.audioUrls.conclusion}`,
+            } : null,
+          });
+        } else if (job.status === 'failed') {
+          clearInterval(polling);
+          setApiError(`백엔드 처리 실패: ${job.error || 'unknown'}`);
+        }
+      }, 2000);
+    }
+
+    run().catch(err => {
+      setApiError(String(err.message || err));
+    });
+
+    return () => { cancelled = true; if (polling) clearInterval(polling); };
+  }, [file]);
 
   // 스캔 라인 애니메이션
   useEffect(() => {
@@ -87,12 +111,9 @@ export default function AnalyzingPage({ file, onComplete }) {
     return () => clearInterval(t);
   }, [currentStep]);
 
-  // 파이프라인 진행
+  // 파이프라인 진행 (시각 효과 전용 — 마지막 단계에서 대기, onComplete는 폴링이 트리거)
   useEffect(() => {
-    if (currentStep >= PIPELINE_STEPS.length) {
-      setTimeout(() => onComplete(), 600);
-      return;
-    }
+    if (currentStep >= PIPELINE_STEPS.length) return;
     const step = PIPELINE_STEPS[currentStep];
     let prog = 0;
     const tick = step.duration / 60;
@@ -104,7 +125,8 @@ export default function AnalyzingPage({ file, onComplete }) {
         setStepProgress(100);
         setTimeout(() => {
           setCompletedSteps(prev => [...prev, currentStep]);
-          setCurrentStep(s => s + 1);
+          // 마지막 단계에서는 정지 (백엔드 응답 대기)
+          setCurrentStep(s => Math.min(s + 1, PIPELINE_STEPS.length - 1));
           setStepProgress(0);
         }, 300);
       } else {
@@ -143,6 +165,17 @@ export default function AnalyzingPage({ file, onComplete }) {
           블랙박스 영상 분석 중...
         </h2>
         <p style={{ color: '#94a3b8', fontSize: '13px' }}>{file?.name}</p>
+        {apiError && (
+          <div style={{
+            marginTop: '12px',
+            display: 'inline-block',
+            background: '#ef444411', border: '1px solid #ef444444',
+            borderRadius: '8px', padding: '6px 12px',
+            color: '#fca5a5', fontSize: '12px',
+          }}>
+            ⚠ {apiError}
+          </div>
+        )}
       </div>
 
       <div style={{ width: '100%', maxWidth: '900px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
