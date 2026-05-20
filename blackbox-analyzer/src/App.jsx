@@ -1,34 +1,14 @@
 import { useState } from "react";
 import DisclaimerModal from "./components/DisclaimerModal";
 import UploadScene3D from "./components/upload/UploadScene3D";
+import AnalyzingPage from "./components/AnalyzingPage";
 import ResultPage from "./components/ResultPage";
 
-// Stages: 'disclaimer' → 'upload' → 'result'
-// (analyzing is now handled inside UploadScene3D)
+// Stages: 'disclaimer' → 'upload' (3D scene) → 'analyzing' (backend) → 'result'
 export default function App() {
   const [stage, setStage] = useState("disclaimer");
   const [file, setFile] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
-
-  function handleAcceptDisclaimer() {
-    setStage("upload");
-  }
-
-  function handleUpload(uploadedFile) {
-    setFile(uploadedFile);
-    setStage("analyzing");
-  }
-
-  function handleAnalysisComplete(result) {
-    setAnalysisResult(result);
-    setStage("result");
-  }
-
-  function handleReset() {
-    setFile(null);
-    setAnalysisResult(null);
-    setStage("upload");
-  }
 
   return (
     <div
@@ -46,6 +26,15 @@ export default function App() {
         <UploadScene3D
           onAnalysisComplete={(uploadedFile) => {
             setFile(uploadedFile);
+            setStage("analyzing");
+          }}
+        />
+      )}
+      {stage === "analyzing" && (
+        <AnalyzingPage
+          file={file}
+          onComplete={(result) => {
+            setAnalysisResult(result);
             setStage("result");
           }}
         />
@@ -53,8 +42,10 @@ export default function App() {
       {stage === "result" && (
         <ResultPage
           file={file}
+          analysisResult={analysisResult}
           onReset={() => {
             setFile(null);
+            setAnalysisResult(null);
             setStage("upload");
           }}
         />
