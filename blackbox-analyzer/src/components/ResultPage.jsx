@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-const FONT = "'DungGeunMo', sans-serif";
+const FONT = "'Pretendard', -apple-system, sans-serif";
 
 const MOCK = {
   id: "ANA-2026-0520-7842",

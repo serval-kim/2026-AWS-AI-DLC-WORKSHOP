@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const FONT      = "'DungGeunMo', sans-serif";
-const FONT_MONO = "'DungGeunMo', monospace";
+const FONT      = "'Pretendard', -apple-system, sans-serif";
+const FONT_MONO = "'Pretendard', monospace";
 
 // Monochrome tokens
 const BG_PANEL  = 'rgba(12, 12, 16, 0.72)';

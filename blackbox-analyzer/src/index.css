@@ -1,7 +1,7 @@
 @font-face {
-  font-family: 'DungGeunMo';
-  src: url('/DungGeunMo.woff') format('woff');
-  font-weight: normal;
+  font-family: 'Pretendard';
+  src: url('/PretendardVariable.woff2') format('woff2');
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
@@ -36,8 +36,8 @@
   --warn: #d4a05a;
   --danger: #c25a5a;
 
-  --font-sans: 'DungGeunMo', sans-serif;
-  --font-mono: 'DungGeunMo', monospace;
+  --font-sans: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Pretendard', monospace;
 }
 
 html,
