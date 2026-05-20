@@ -86,8 +86,8 @@ class VideoAnalyzer:
         self._load_yolo()
         logger.info("object_detection_start", frame_count=len(frames))
 
-        # Target classes for traffic analysis
-        target_classes = {"car", "truck", "bus", "motorcycle", "traffic light"}
+        # Target classes for traffic analysis (vehicles + vulnerable road users + infrastructure)
+        target_classes = {"car", "truck", "bus", "motorcycle", "bicycle", "person", "traffic light"}
 
         detections = []
         for frame in frames:
@@ -137,11 +137,11 @@ class VideoAnalyzer:
 
         # Collect all tracks
         tracks_dict: dict[int, list[TrackPoint]] = {}
-        vehicle_classes = {"car", "truck", "bus", "motorcycle"}
+        trackable_classes = {"car", "truck", "bus", "motorcycle", "bicycle", "person"}
 
         for detection in detections:
-            # Filter vehicle detections only
-            vehicle_boxes = [obj for obj in detection.objects if obj.class_name in vehicle_classes]
+            # Filter trackable detections (vehicles + vulnerable road users)
+            vehicle_boxes = [obj for obj in detection.objects if obj.class_name in trackable_classes]
 
             if not vehicle_boxes:
                 # Feed empty detection to tracker to maintain state
@@ -212,12 +212,12 @@ class VideoAnalyzer:
 
     def _fallback_tracking(self, detections: list[DetectionResult]) -> list[VehicleTrack]:
         """Fallback tracking when ByteTrack fails - group detections by proximity."""
-        vehicle_classes = {"car", "truck", "bus", "motorcycle"}
+        trackable_classes = {"car", "truck", "bus", "motorcycle", "bicycle", "person"}
         all_vehicle_dets = []
 
         for det in detections:
             for obj in det.objects:
-                if obj.class_name in vehicle_classes:
+                if obj.class_name in trackable_classes:
                     all_vehicle_dets.append((det.frame_id, det.timestamp, obj))
 
         if not all_vehicle_dets:
@@ -361,11 +361,11 @@ class VideoAnalyzer:
         # Step 2: Detect objects
         detections = self.detect_objects(frames)
 
-        # Validate: check if vehicles detected
-        vehicle_classes = {"car", "truck", "bus", "motorcycle"}
+        # Validate: check if road users detected (vehicles, pedestrians, cyclists)
+        trackable_classes = {"car", "truck", "bus", "motorcycle", "bicycle", "person"}
         frames_with_vehicles = sum(
             1 for d in detections
-            if any(obj.class_name in vehicle_classes for obj in d.objects)
+            if any(obj.class_name in trackable_classes for obj in d.objects)
         )
         if frames_with_vehicles < len(detections) * 0.2:
             raise ValueError("NO_VEHICLE: Vehicles detected in less than 20% of frames")
