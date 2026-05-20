@@ -19,6 +19,44 @@ export default function AnalyzingPage({ file, onComplete }) {
   const [completedSteps, setCompletedSteps] = useState([]);
   const [scanPos, setScanPos] = useState(0);
   const [detections, setDetections] = useState([]);
+  const jobRef = React.useRef(null);
+
+  // API 호출: 분석 시작 + 폴링
+  useEffect(() => {
+    const API = 'http://localhost:8000';
+    let polling = null;
+
+    fetch(`${API}/analyze`, { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        jobRef.current = data.job_id;
+        polling = setInterval(() => {
+          fetch(`${API}/jobs/${jobRef.current}`)
+            .then(r => r.json())
+            .then(job => {
+              if (job.status === 'completed') {
+                clearInterval(polling);
+                // API 결과를 onComplete로 전달
+                onComplete({
+                  script: job.script,
+                  videoUrl: `${API}${job.videoUrl}`,
+                  audioUrls: job.audioUrls ? {
+                    intro: `${API}${job.audioUrls.intro}`,
+                    analysis: `${API}${job.audioUrls.analysis}`,
+                    conclusion: `${API}${job.audioUrls.conclusion}`,
+                  } : null,
+                });
+              }
+            });
+        }, 2000);
+      })
+      .catch(() => {
+        // API 실패 시 기존 mock 동작으로 fallback
+        setTimeout(() => onComplete(null), 18000);
+      });
+
+    return () => { if (polling) clearInterval(polling); };
+  }, []);
 
   // 스캔 라인 애니메이션
   useEffect(() => {

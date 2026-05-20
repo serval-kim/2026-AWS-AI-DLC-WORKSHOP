@@ -251,7 +251,7 @@ function ReelsPlayer() {
   );
 }
 
-export default function ResultPage({ file, onReset }) {
+export default function ResultPage({ file, analysisResult, onReset }) {
   const [activeTab, setActiveTab] = useState('fault');
   const [liveSubtitle, setLiveSubtitle] = useState('');
 
@@ -531,13 +531,13 @@ export default function ResultPage({ file, onReset }) {
                     videoContent={
                       <VideoEngine
                         src={videoSrc}
-                        script={MUNCHEOL_SCRIPT}
+                        script={analysisResult?.script || MUNCHEOL_SCRIPT}
                         showSubtitle={false}
                         onSubtitleChange={setLiveSubtitle}
                         style={{ width: '100%', height: '100%' }}
                       />
                     }
-                    personVideo={window.__HANMUNCHEOL_VIDEO_URL || null}
+                    personVideo={analysisResult?.videoUrl || null}
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
