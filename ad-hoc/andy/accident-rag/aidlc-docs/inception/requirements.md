@@ -33,6 +33,6 @@
 ## 기술 스택
 
 - Python 3.10+
-- AWS Bedrock: Titan Text Embeddings V2, Claude Haiku 4.5
+- AWS Bedrock: Titan Text Embeddings V2, Claude Haiku 4.5 (inference profile: `us.anthropic.claude-haiku-4-5-20251001-v1:0`)
 - OpenSearch (관리형, FGAC + Basic Auth)
 - pypdf, opensearch-py, requests-aws4auth, boto3

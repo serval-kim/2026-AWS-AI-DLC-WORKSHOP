@@ -125,5 +125,5 @@ Basic Auth가 설정되어 있으면 SigV4보다 우선 사용됨.
 ## OpenSearch 엔드포인트
 
 ```
-https://search-accident-rag-5i3qffvel7idyzfaixos2n4iiu.aos.us-east-1.on.aws
+https://search-accident-rag2-eoeaysuk3gdwj4nbzagzbzt7da.us-east-1.es.amazonaws.com
 ```

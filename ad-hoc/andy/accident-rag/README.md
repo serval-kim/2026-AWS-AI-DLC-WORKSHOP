@@ -32,7 +32,7 @@
 | PDF 청킹 | `pdf_loader.py` | pypdf + 조문 헤더(`제N조`) 분할 |
 | 임베딩 | `embeddings.py` | Bedrock Titan Text Embeddings V2 (1024차원) |
 | 벡터 저장 | `opensearch_store.py` | OpenSearch k-NN (HNSW, cosine, FAISS) |
-| 검색+생성 | `query.py` | Bedrock Converse + Claude Haiku 4.5 |
+| 검색+생성 | `query.py` | Bedrock Converse + Claude Haiku 4.5 (inference profile: `us.anthropic.claude-haiku-4-5-20251001-v1:0`) |
 | CLI | `cli.py` | `ingest`, `query`, `doctor` 서브커맨드 |
 
 ## 설치
@@ -121,7 +121,7 @@ python -m accident_rag.cli doctor
       "page_hint": 15
     }
   ],
-  "model_id": "anthropic.claude-haiku-4-5-20251001-v1:0"
+  "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 }
 ```
 
@@ -148,4 +148,4 @@ python -m accident_rag.cli doctor
 
 - 현재 도로교통법 본문만 임베딩. 손해보험협회 과실비율 인정기준, 판례 추가 시 정확도 향상 예상.
 - Titan V2 임베딩은 순차 호출 (Bedrock batch API 미지원). 대량 적재 시 `--sleep-between` 으로 throttle 관리.
-- Claude Haiku 4.5 기본. 더 정밀한 답변이 필요하면 `--llm-model-id anthropic.claude-sonnet-4-6` 등으로 교체 가능.
+- Claude Haiku 4.5 기본 (inference profile `us.anthropic.claude-haiku-4-5-20251001-v1:0`). 더 정밀한 답변이 필요하면 `--llm-model-id us.anthropic.claude-sonnet-4-6-20250514-v1:0` 등으로 교체 가능.
