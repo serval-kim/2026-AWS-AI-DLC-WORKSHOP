@@ -1,126 +1,114 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-const FONT = "'Noto Sans KR', -apple-system, sans-serif";
-const C_CYAN = '#00e5ff';
-const C_DIM  = 'rgba(0,229,255,0.3)';
+const FONT      = "'Open Sans', -apple-system, sans-serif";
+const FONT_MONO = "'Open Sans', monospace";
 
-// ─── SVG Icons ────────────────────────────────────────────────────────────────
-function UploadIcon({ size = 44, color = C_DIM }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 44 44" fill="none">
-      <path d="M22 30V14" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
-      <path d="M14 22L22 14L30 22" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M8 32V36H36V32" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+// Monochrome tokens
+const BG_PANEL  = 'rgba(12, 12, 16, 0.72)';
+const LINE_DIM  = 'rgba(255, 255, 255, 0.08)';
+const LINE_MID  = 'rgba(255, 255, 255, 0.16)';
+const LINE_HI   = 'rgba(255, 255, 255, 0.4)';
+const TXT_HI    = '#fafafc';
+const TXT_MID   = '#c8cad0';
+const TXT_DIM   = '#8b8e96';
+const TXT_VDIM  = '#54565c';
 
-function CheckIcon({ size = 36, color = C_CYAN }) {
+// Spring settings
+const SPRING_SOFT  = { type: 'spring', stiffness: 280, damping: 32, mass: 0.8 };
+const EASE_OUT     = { duration: 0.45, ease: [0.22, 1, 0.36, 1] };
+
+// ─── Icons ────────────────────────────────────────────────────────────────────
+function UploadIcon({ size = 36, color = LINE_HI }) {
   return (
     <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-      <circle cx="18" cy="18" r="16" stroke={color} strokeWidth="1.5" />
-      <path d="M11 18L16 23L25 13" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M18 25V11" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M12 17L18 11L24 17" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 26V29H28V26" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-// ─── Detection box that floats and fades ──────────────────────────────────────
-function DetectionBox({ box }) {
-  const { x, y, w, h, label, color, opacity } = box;
+function BlackboxIcon({ size = 14, color = TXT_MID }) {
   return (
-    <div style={{
-      position: 'absolute',
-      left: `${x}%`, top: `${y}%`,
-      width: `${w}%`, height: `${h}%`,
-      border: `1.5px solid ${color}`,
-      opacity,
-      transition: 'opacity 0.3s ease',
-      pointerEvents: 'none',
-    }}>
-      {/* Corner accents */}
-      {[
-        { top: -1, left: -1, borderTop: `2px solid ${color}`, borderLeft: `2px solid ${color}`, width: 8, height: 8 },
-        { top: -1, right: -1, borderTop: `2px solid ${color}`, borderRight: `2px solid ${color}`, width: 8, height: 8 },
-        { bottom: -1, left: -1, borderBottom: `2px solid ${color}`, borderLeft: `2px solid ${color}`, width: 8, height: 8 },
-        { bottom: -1, right: -1, borderBottom: `2px solid ${color}`, borderRight: `2px solid ${color}`, width: 8, height: 8 },
-      ].map((s, i) => (
-        <div key={i} style={{ position: 'absolute', ...s }} />
-      ))}
-      {/* Label */}
-      <div style={{
-        position: 'absolute', top: -18, left: 0,
-        background: color,
-        color: '#000',
-        fontSize: 9, fontWeight: 700,
-        padding: '1px 5px',
-        letterSpacing: '0.08em',
-        whiteSpace: 'nowrap',
-        fontFamily: 'monospace',
-      }}>
-        {label}
-      </div>
-    </div>
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <rect x="2" y="5" width="12" height="10" rx="1" stroke={color} strokeWidth="1" />
+      <path d="M14 9L18 7V13L14 11" stroke={color} strokeWidth="1" strokeLinejoin="round" />
+      <circle cx="8" cy="10" r="2" stroke={color} strokeWidth="1" />
+    </svg>
   );
 }
 
-// ─── Analyzing overlay (full-screen video + detection boxes) ─────────────────
+// ─── Detection box (analyzing screen) ────────────────────────────────────────
+function DetectionBox({ box }) {
+  const { x, y, w, h, label } = box;
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+      style={{
+        position: 'absolute',
+        left: `${x}%`, top: `${y}%`,
+        width: `${w}%`, height: `${h}%`,
+        border: `1px solid ${LINE_HI}`,
+        pointerEvents: 'none',
+      }}
+    >
+      {[
+        { top: -1, left: -1, borderTop: `1.5px solid ${TXT_HI}`, borderLeft: `1.5px solid ${TXT_HI}`, width: 6, height: 6 },
+        { top: -1, right: -1, borderTop: `1.5px solid ${TXT_HI}`, borderRight: `1.5px solid ${TXT_HI}`, width: 6, height: 6 },
+        { bottom: -1, left: -1, borderBottom: `1.5px solid ${TXT_HI}`, borderLeft: `1.5px solid ${TXT_HI}`, width: 6, height: 6 },
+        { bottom: -1, right: -1, borderBottom: `1.5px solid ${TXT_HI}`, borderRight: `1.5px solid ${TXT_HI}`, width: 6, height: 6 },
+      ].map((s, i) => <div key={i} style={{ position: 'absolute', ...s }} />)}
+      <div style={{
+        position: 'absolute', top: -16, left: 0,
+        background: 'rgba(0,0,0,0.7)',
+        border: `1px solid ${LINE_MID}`,
+        color: TXT_HI,
+        fontSize: 8, fontWeight: 500,
+        padding: '1px 5px',
+        letterSpacing: '0.12em',
+        whiteSpace: 'nowrap',
+        fontFamily: FONT_MONO,
+      }}>{label}</div>
+    </motion.div>
+  );
+}
+
+// ─── Analyzing screen ─────────────────────────────────────────────────────────
 function AnalyzingScreen({ file, onComplete }) {
-  const videoRef = useRef();
   const videoUrl = useRef(URL.createObjectURL(file));
   const [boxes, setBoxes] = useState([]);
   const [scanY, setScanY] = useState(0);
   const [elapsed, setElapsed] = useState(0);
 
-  const LABELS = [
-    { text: 'VEHICLE_A', color: '#00e5ff' },
-    { text: 'VEHICLE_B', color: '#ff6600' },
-    { text: 'PEDESTRIAN', color: '#ffffff' },
-    { text: 'LANE_L', color: '#00ff88' },
-    { text: 'LANE_R', color: '#00ff88' },
-    { text: 'SIGNAL', color: '#ffcc00' },
-    { text: 'TRAJECTORY', color: '#ff00aa' },
-  ];
+  const LABELS = ['VEHICLE_A', 'VEHICLE_B', 'PEDESTRIAN', 'LANE_L', 'LANE_R', 'SIGNAL', 'TRAJECTORY'];
 
-  // Spawn random detection boxes
   useEffect(() => {
     const iv = setInterval(() => {
-      const label = LABELS[Math.floor(Math.random() * LABELS.length)];
       const newBox = {
         id: Date.now() + Math.random(),
         x: 5 + Math.random() * 60,
         y: 10 + Math.random() * 60,
         w: 8 + Math.random() * 22,
         h: 6 + Math.random() * 18,
-        label: label.text,
-        color: label.color,
-        opacity: 0,
+        label: LABELS[Math.floor(Math.random() * LABELS.length)],
       };
-      setBoxes(prev => [...prev.slice(-8), newBox]);
-      // Fade in
-      setTimeout(() => {
-        setBoxes(prev => prev.map(b => b.id === newBox.id ? { ...b, opacity: 1 } : b));
-      }, 50);
-      // Fade out
-      setTimeout(() => {
-        setBoxes(prev => prev.map(b => b.id === newBox.id ? { ...b, opacity: 0 } : b));
-      }, 1200 + Math.random() * 800);
-      // Remove
+      setBoxes(prev => [...prev.slice(-7), newBox]);
       setTimeout(() => {
         setBoxes(prev => prev.filter(b => b.id !== newBox.id));
-      }, 2200 + Math.random() * 800);
+      }, 1800 + Math.random() * 800);
     }, 320);
     return () => clearInterval(iv);
   }, []);
 
-  // Scan line
   useEffect(() => {
-    const iv = setInterval(() => {
-      setScanY(y => (y + 0.8) % 100);
-    }, 16);
+    const iv = setInterval(() => setScanY(y => (y + 0.6) % 100), 16);
     return () => clearInterval(iv);
   }, []);
 
-  // Elapsed timer → trigger onComplete after ~6s
   useEffect(() => {
     const iv = setInterval(() => {
       setElapsed(e => {
@@ -131,182 +119,185 @@ function AnalyzingScreen({ file, onComplete }) {
     return () => clearInterval(iv);
   }, [onComplete]);
 
-  // Cleanup blob URL
   useEffect(() => {
     const url = videoUrl.current;
     return () => URL.revokeObjectURL(url);
   }, []);
 
   const progress = Math.min(100, Math.round((elapsed / 6) * 100));
-
-  const PIPELINE = ['영상 업로드', '프레임 추출', '객체 탐지', '궤적 분석', '과실 판단', '릴스 생성'];
+  const PIPELINE = ['UPLOADING', 'EXTRACTING', 'DETECTING', 'TRACKING', 'ANALYZING', 'COMPOSING'];
   const activeStep = Math.min(PIPELINE.length - 1, Math.floor((elapsed / 6) * PIPELINE.length));
 
   return (
-    <div style={{
-      position: 'absolute', inset: 0, zIndex: 100,
-      background: 'transparent',
-      fontFamily: FONT,
-      animation: 'fadeIn 0.5s ease',
-    }}>
-      {/* Full-screen video */}
-      <video
-        ref={videoRef}
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={EASE_OUT}
+      style={{
+        position: 'absolute', inset: 0, zIndex: 100,
+        background: 'transparent',
+        fontFamily: FONT,
+      }}
+    >
+      <motion.video
+        initial={{ scale: 1.05, opacity: 0 }}
+        animate={{ scale: 1, opacity: 0.78 }}
+        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         src={videoUrl.current}
-        autoPlay
-        loop
-        muted
-        playsInline
+        autoPlay loop muted playsInline
         style={{
           position: 'absolute', inset: 0,
           width: '100%', height: '100%',
           objectFit: 'cover',
-          opacity: 0.75,
         }}
       />
 
-      {/* Dark overlay — lighter so video is visible */}
       <div style={{
         position: 'absolute', inset: 0,
-        background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.5) 100%)',
+        background: 'linear-gradient(to bottom, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.65) 100%)',
       }} />
 
       {/* Scan line */}
       <div style={{
         position: 'absolute', left: 0, right: 0,
-        top: `${scanY}%`, height: 2,
-        background: `linear-gradient(90deg, transparent, ${C_CYAN}88, transparent)`,
+        top: `${scanY}%`, height: 1,
+        background: `linear-gradient(90deg, transparent, ${LINE_HI}, transparent)`,
         pointerEvents: 'none',
       }} />
 
-      {/* Detection boxes */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-        {boxes.map(box => <DetectionBox key={box.id} box={box} />)}
-      </div>
+      <AnimatePresence>
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+          {boxes.map(box => <DetectionBox key={box.id} box={box} />)}
+        </div>
+      </AnimatePresence>
 
       {/* HUD corners */}
       {[
-        { top: 16, left: 16, borderTop: `1.5px solid ${C_CYAN}`, borderLeft: `1.5px solid ${C_CYAN}` },
-        { top: 16, right: 16, borderTop: `1.5px solid ${C_CYAN}`, borderRight: `1.5px solid ${C_CYAN}` },
-        { bottom: 16, left: 16, borderBottom: `1.5px solid ${C_CYAN}`, borderLeft: `1.5px solid ${C_CYAN}` },
-        { bottom: 16, right: 16, borderBottom: `1.5px solid ${C_CYAN}`, borderRight: `1.5px solid ${C_CYAN}` },
+        { top: 16, left: 16, borderTop: `1px solid ${LINE_HI}`, borderLeft: `1px solid ${LINE_HI}` },
+        { top: 16, right: 16, borderTop: `1px solid ${LINE_HI}`, borderRight: `1px solid ${LINE_HI}` },
+        { bottom: 16, left: 16, borderBottom: `1px solid ${LINE_HI}`, borderLeft: `1px solid ${LINE_HI}` },
+        { bottom: 16, right: 16, borderBottom: `1px solid ${LINE_HI}`, borderRight: `1px solid ${LINE_HI}` },
       ].map((s, i) => (
-        <div key={i} style={{ position: 'absolute', width: 24, height: 24, ...s, pointerEvents: 'none' }} />
+        <div key={i} style={{ position: 'absolute', width: 22, height: 22, ...s, pointerEvents: 'none' }} />
       ))}
 
-      {/* Top bar */}
-      <div style={{
-        position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)',
-        display: 'flex', alignItems: 'center', gap: 8,
-        background: 'rgba(0,0,0,0.7)', borderRadius: 4,
-        padding: '4px 14px', border: `1px solid ${C_DIM}`,
-      }}>
-        <span style={{ width: 6, height: 6, background: '#ff2200', borderRadius: '50%', animation: 'blink 1s infinite', display: 'block' }} />
-        <span style={{ color: C_CYAN, fontSize: 10, fontWeight: 700, letterSpacing: '0.15em' }}>AI ANALYZING</span>
-      </div>
+      {/* Top REC indicator */}
+      <motion.div
+        initial={{ y: -12, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ ...EASE_OUT, delay: 0.1 }}
+        style={{
+          position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)',
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: 'rgba(0,0,0,0.6)',
+          border: `1px solid ${LINE_MID}`,
+          padding: '4px 12px',
+        }}
+      >
+        <span style={{ width: 5, height: 5, background: '#c25a5a', borderRadius: '50%', animation: 'blink 1.2s infinite', display: 'block' }} />
+        <span style={{ color: TXT_HI, fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', fontFamily: FONT_MONO }}>
+          AI · ANALYZING
+        </span>
+      </motion.div>
 
-      {/* Pipeline steps — right side */}
-      <div style={{
-        position: 'absolute', right: 20, top: '50%', transform: 'translateY(-50%)',
-        display: 'flex', flexDirection: 'column', gap: 8,
-      }}>
+      {/* Pipeline — right */}
+      <motion.div
+        initial={{ x: 12, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ ...EASE_OUT, delay: 0.15 }}
+        style={{
+          position: 'absolute', right: 24, top: '50%', transform: 'translateY(-50%)',
+          display: 'flex', flexDirection: 'column', gap: 10,
+          fontFamily: FONT_MONO,
+        }}
+      >
         {PIPELINE.map((step, i) => {
-          const done   = i < activeStep;
-          const active = i === activeStep;
+          const done = i < activeStep, active = i === activeStep;
           return (
             <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              opacity: done || active ? 1 : 0.3,
+              display: 'flex', alignItems: 'center', gap: 10,
+              opacity: done || active ? 1 : 0.35,
               transition: 'opacity 0.4s',
             }}>
               <div style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: done ? C_CYAN : active ? '#ffffff' : 'rgba(255,255,255,0.3)',
-                boxShadow: active ? `0 0 8px ${C_CYAN}` : 'none',
-                flexShrink: 0,
+                width: 4, height: 4, borderRadius: '50%',
+                background: done ? TXT_HI : active ? TXT_HI : TXT_VDIM,
+                boxShadow: active ? `0 0 6px ${TXT_HI}` : 'none',
               }} />
               <span style={{
-                color: done ? C_CYAN : active ? '#ffffff' : 'rgba(255,255,255,0.4)',
-                fontSize: 10, fontWeight: active ? 700 : 400,
-                letterSpacing: '0.06em',
-                fontFamily: 'monospace',
+                color: done ? TXT_MID : active ? TXT_HI : TXT_VDIM,
+                fontSize: 9, fontWeight: 500,
+                letterSpacing: '0.18em',
               }}>{step}</span>
-              {active && (
-                <span style={{ color: C_CYAN, fontSize: 9, animation: 'blink 0.8s infinite' }}>●</span>
-              )}
             </div>
           );
         })}
-      </div>
+      </motion.div>
 
-      {/* Bottom center — analyzing text + progress */}
-      <div style={{
-        position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)',
-        textAlign: 'center', minWidth: 320,
-      }}>
-        {/* Progress bar */}
+      {/* Bottom — analyzing status + progress */}
+      <motion.div
+        initial={{ y: 16, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ ...EASE_OUT, delay: 0.2 }}
+        style={{
+          position: 'absolute', bottom: 44, left: '50%', transform: 'translateX(-50%)',
+          textAlign: 'center', minWidth: 360,
+        }}
+      >
         <div style={{
-          background: 'rgba(0,229,255,0.1)', borderRadius: 100,
-          height: 2, marginBottom: 16, overflow: 'hidden',
-          border: `1px solid ${C_DIM}`,
+          background: LINE_DIM, height: 1,
+          marginBottom: 18, overflow: 'hidden',
         }}>
-          <div style={{
-            height: '100%', width: `${progress}%`,
-            background: C_CYAN,
-            borderRadius: 100,
-            transition: 'width 0.3s ease',
-            boxShadow: `0 0 10px ${C_CYAN}`,
-          }} />
+          <motion.div
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.3, ease: 'linear' }}
+            style={{ height: '100%', background: TXT_HI }}
+          />
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 6 }}>
-          {/* Spinner */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 8 }}>
           <div style={{
-            width: 14, height: 14,
-            border: `1.5px solid ${C_DIM}`,
-            borderTop: `1.5px solid ${C_CYAN}`,
+            width: 12, height: 12,
+            border: `1px solid ${LINE_MID}`,
+            borderTop: `1px solid ${TXT_HI}`,
             borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
+            animation: 'spin 0.9s linear infinite',
           }} />
-          <span style={{
-            color: '#ffffff',
-            fontSize: 15, fontWeight: 600,
-            letterSpacing: '0.04em',
-          }}>
-            {PIPELINE[activeStep]} 중...
+          <span style={{ color: TXT_HI, fontSize: 13, fontWeight: 400, letterSpacing: '0.04em' }}>
+            {PIPELINE[activeStep]}
           </span>
-          <span style={{
-            color: C_CYAN, fontSize: 13,
-            fontFamily: 'monospace', fontWeight: 700,
-          }}>
-            {progress}%
+          <span style={{ color: TXT_DIM, fontSize: 11, fontFamily: FONT_MONO, letterSpacing: '0.05em' }}>
+            {String(progress).padStart(2, '0')}%
           </span>
         </div>
 
-        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: '0.1em' }}>
-          AI BLACKBOX ANALYZER · 본 분석은 AI 추정치이며 법적 효력이 없습니다
+        <p style={{
+          color: TXT_VDIM, fontSize: 9,
+          letterSpacing: '0.18em', fontFamily: FONT_MONO,
+          marginTop: 4,
+        }}>
+          BLACKBOX ANALYZER · 본 분석은 AI 추정치이며 법적 효력이 없습니다
         </p>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
-// ─── Upload card (shown over 3D scene) ───────────────────────────────────────
+// ─── Upload card ──────────────────────────────────────────────────────────────
 export default function BlackboxOverlay({ visible, onUpload }) {
   const [dragOver, setDragOver]   = useState(false);
   const [file, setFile]           = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError]         = useState('');
-  const inputRef  = useRef();
-  const videoRef  = useRef();
+  const inputRef   = useRef();
   const previewUrl = useRef(null);
 
   const ALLOWED_EXT = /\.(mp4|avi|mov)$/i;
   const MAX_SIZE    = 500 * 1024 * 1024;
 
   function validateFile(f) {
-    if (!ALLOWED_EXT.test(f.name)) return 'MP4, AVI, MOV 형식만 지원합니다.';
-    if (f.size > MAX_SIZE) return '파일 크기가 500MB를 초과합니다.';
+    if (!ALLOWED_EXT.test(f.name)) return 'MP4, AVI, MOV 형식만 지원합니다';
+    if (f.size > MAX_SIZE) return '파일 크기가 500MB를 초과합니다';
     return null;
   }
 
@@ -314,7 +305,6 @@ export default function BlackboxOverlay({ visible, onUpload }) {
     const err = validateFile(f);
     if (err) { setError(err); return; }
     setError('');
-    // Revoke previous preview
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
     previewUrl.current = URL.createObjectURL(f);
     setFile(f);
@@ -326,11 +316,6 @@ export default function BlackboxOverlay({ visible, onUpload }) {
     if (f) handleFile(f);
   }
 
-  function startAnalysis() {
-    if (!file) return;
-    setAnalyzing(true);
-  }
-
   const handleAnalysisComplete = useCallback(() => {
     onUpload(file);
   }, [file, onUpload]);
@@ -340,117 +325,120 @@ export default function BlackboxOverlay({ visible, onUpload }) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
-  // Cleanup
-  useEffect(() => {
-    return () => { if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); };
-  }, []);
+  useEffect(() => () => { if (previewUrl.current) URL.revokeObjectURL(previewUrl.current); }, []);
 
   if (!visible) return null;
 
-  // ── Analyzing full-screen ──
   if (analyzing && file) {
     return <AnalyzingScreen file={file} onComplete={handleAnalysisComplete} />;
   }
 
-  // ── Upload card ──
   return (
-    <div style={{
-      position: 'absolute', inset: 0,
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      pointerEvents: 'none',
-      zIndex: 10,
-      fontFamily: FONT,
-    }}>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={EASE_OUT}
+      style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        pointerEvents: 'none',
+        zIndex: 10,
+        fontFamily: FONT,
+      }}
+    >
       {/* Vignette */}
       <div style={{
         position: 'absolute', inset: 0,
-        background: 'radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.88) 100%)',
+        background: 'radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.72) 100%)',
         pointerEvents: 'none',
       }} />
 
       {/* HUD corners */}
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
         {[
-          { top: 14, left: 14, borderTop: `1.5px solid ${C_CYAN}`, borderLeft: `1.5px solid ${C_CYAN}` },
-          { top: 14, right: 14, borderTop: `1.5px solid ${C_CYAN}`, borderRight: `1.5px solid ${C_CYAN}` },
-          { bottom: 14, left: 14, borderBottom: `1.5px solid ${C_CYAN}`, borderLeft: `1.5px solid ${C_CYAN}` },
-          { bottom: 14, right: 14, borderBottom: `1.5px solid ${C_CYAN}`, borderRight: `1.5px solid ${C_CYAN}` },
-        ].map((s, i) => (
-          <div key={i} style={{ position: 'absolute', width: 28, height: 28, ...s }} />
-        ))}
-        {/* REC */}
+          { top: 16, left: 16, borderTop: `1px solid ${LINE_HI}`, borderLeft: `1px solid ${LINE_HI}` },
+          { top: 16, right: 16, borderTop: `1px solid ${LINE_HI}`, borderRight: `1px solid ${LINE_HI}` },
+          { bottom: 16, left: 16, borderBottom: `1px solid ${LINE_HI}`, borderLeft: `1px solid ${LINE_HI}` },
+          { bottom: 16, right: 16, borderBottom: `1px solid ${LINE_HI}`, borderRight: `1px solid ${LINE_HI}` },
+        ].map((s, i) => <div key={i} style={{ position: 'absolute', width: 22, height: 22, ...s }} />)}
+
+        {/* Top brand */}
         <div style={{
           position: 'absolute', top: 18, left: '50%', transform: 'translateX(-50%)',
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: 'rgba(0,0,0,0.7)', borderRadius: 3, padding: '3px 10px',
-          border: `1px solid ${C_DIM}`,
+          display: 'flex', alignItems: 'center', gap: 8,
         }}>
-          <span style={{ width: 6, height: 6, background: '#ff2200', borderRadius: '50%', animation: 'blink 1s infinite', display: 'block' }} />
-          <span style={{ color: C_CYAN, fontSize: 10, fontWeight: 700, letterSpacing: '0.15em' }}>REC</span>
+          <BlackboxIcon size={12} color={TXT_DIM} />
+          <span style={{ color: TXT_DIM, fontSize: 10, fontWeight: 500, letterSpacing: '0.22em', fontFamily: FONT_MONO }}>
+            BLACKBOX · ANALYZER
+          </span>
         </div>
-        <div style={{ position: 'absolute', bottom: 18, left: 18, color: C_DIM, fontSize: 10, fontFamily: 'monospace' }}>
+
+        <div style={{
+          position: 'absolute', bottom: 22, left: 22,
+          color: TXT_VDIM, fontSize: 9, fontFamily: FONT_MONO, letterSpacing: '0.1em',
+        }}>
           {new Date().toLocaleString('ko-KR', { hour12: false })}
         </div>
-        <div style={{ position: 'absolute', bottom: 18, right: 18, color: C_DIM, fontSize: 10, fontFamily: 'monospace' }}>
-          37.5665°N 126.9780°E
+        <div style={{
+          position: 'absolute', bottom: 22, right: 22,
+          color: TXT_VDIM, fontSize: 9, fontFamily: FONT_MONO, letterSpacing: '0.1em',
+        }}>
+          37.5665°N · 126.9780°E
         </div>
       </div>
 
       {/* Card */}
-      <div style={{
-        position: 'relative', zIndex: 20,
-        pointerEvents: 'all',
-        width: '100%', maxWidth: 480,
-        padding: '0 24px',
-        animation: 'fadeIn 0.7s ease',
-      }}>
+      <motion.div
+        initial={{ y: 16, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={SPRING_SOFT}
+        style={{
+          position: 'relative', zIndex: 20,
+          pointerEvents: 'all',
+          width: '100%', maxWidth: 460,
+          padding: '0 28px',
+        }}
+      >
         {/* Title */}
-        <div style={{ textAlign: 'center', marginBottom: 20 }}>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7,
-            border: `1px solid ${C_DIM}`, borderRadius: 100,
-            padding: '4px 14px', marginBottom: 12,
-            background: 'rgba(0,229,255,0.04)',
-          }}>
-            <svg width="13" height="13" viewBox="0 0 20 20" fill="none">
-              <rect x="1" y="4" width="14" height="12" rx="1.5" stroke={C_CYAN} strokeWidth="1.2" />
-              <path d="M15 8L19 6V14L15 12" stroke={C_CYAN} strokeWidth="1.2" strokeLinejoin="round" />
-              <circle cx="8" cy="10" r="2.5" stroke={C_CYAN} strokeWidth="1.2" />
-            </svg>
-            <span style={{ color: C_CYAN, fontSize: 10, fontWeight: 700, letterSpacing: '0.18em' }}>
-              BLACKBOX AI ANALYZER
-            </span>
-          </div>
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <p style={{
+            color: TXT_VDIM, fontSize: 9,
+            fontFamily: FONT_MONO, letterSpacing: '0.32em',
+            marginBottom: 18,
+          }}>UPLOAD · 01</p>
           <h1 style={{
-            fontSize: 'clamp(17px, 3vw, 26px)', fontWeight: 600,
-            color: '#ffffff', marginBottom: 4, lineHeight: 1.3,
+            fontSize: 'clamp(22px, 3vw, 32px)',
+            fontWeight: 400,
+            color: TXT_HI,
+            marginBottom: 10,
+            lineHeight: 1.25,
+            letterSpacing: '-0.015em',
           }}>
-            블랙박스 영상을 업로드하세요
+            블랙박스 영상 업로드
           </h1>
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12 }}>
+          <p style={{ color: TXT_DIM, fontSize: 12, fontWeight: 300, letterSpacing: '0.02em' }}>
             AI가 사고를 분석하고 한문철 스타일 릴스를 생성합니다
           </p>
         </div>
 
-        {/* Drop zone / Video preview */}
-        <div
+        {/* Drop zone */}
+        <motion.div
+          layout
+          transition={SPRING_SOFT}
           onDragOver={e => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
           onClick={() => !file && inputRef.current.click()}
           style={{
             position: 'relative',
-            background: dragOver ? 'rgba(0,229,255,0.07)' : 'rgba(0,0,0,0.65)',
-            border: `1.5px dashed ${dragOver ? C_CYAN : file ? 'rgba(0,229,255,0.5)' : C_DIM}`,
-            borderRadius: 12,
-            overflow: 'hidden',
+            background: BG_PANEL,
+            border: `1px solid ${dragOver ? LINE_HI : file ? LINE_MID : LINE_DIM}`,
             cursor: file ? 'default' : 'pointer',
-            transition: 'all 0.25s ease',
-            backdropFilter: 'blur(16px)',
-            marginBottom: 10,
-            // Fixed height: taller when video is loaded
-            height: file ? 200 : 140,
+            backdropFilter: 'blur(12px)',
+            marginBottom: 14,
+            height: file ? 200 : 156,
+            overflow: 'hidden',
           }}
         >
           <input
@@ -461,102 +449,161 @@ export default function BlackboxOverlay({ visible, onUpload }) {
             style={{ display: 'none' }}
           />
 
-          {!file ? (
-            /* Empty state */
-            <div style={{
-              height: '100%', display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}>
-              <div style={{ animation: 'float 3s ease-in-out infinite' }}>
-                <UploadIcon size={40} color={dragOver ? C_CYAN : C_DIM} />
-              </div>
-              <p style={{ color: dragOver ? C_CYAN : 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 500 }}>
-                {dragOver ? '여기에 놓으세요' : '영상 파일을 드래그하거나 클릭'}
-              </p>
-              <p style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10, letterSpacing: '0.05em' }}>
-                MP4 · AVI · MOV · MAX 500MB
-              </p>
-            </div>
-          ) : (
-            /* Video preview */
-            <>
-              <video
-                ref={videoRef}
-                src={previewUrl.current}
-                autoPlay
-                loop
-                muted
-                playsInline
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              />
-              {/* Overlay info */}
-              <div style={{
-                position: 'absolute', inset: 0,
-                background: 'linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%)',
-                pointerEvents: 'none',
-              }} />
-              <div style={{
-                position: 'absolute', bottom: 8, left: 10, right: 10,
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              }}>
-                <span style={{ color: C_CYAN, fontSize: 10, fontWeight: 600 }}>{file.name}</span>
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10 }}>{formatSize(file.size)}</span>
-              </div>
-              {/* Change file button */}
-              <button
-                onClick={e => { e.stopPropagation(); setFile(null); setError(''); }}
+          <AnimatePresence mode="wait">
+            {!file ? (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={EASE_OUT}
                 style={{
-                  position: 'absolute', top: 8, right: 8,
-                  background: 'rgba(0,0,0,0.7)', border: `1px solid ${C_DIM}`,
-                  borderRadius: 4, color: 'rgba(255,255,255,0.5)',
-                  padding: '3px 8px', fontSize: 10, cursor: 'pointer', fontFamily: FONT,
+                  height: '100%', display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center', gap: 14,
                 }}
-              >변경</button>
-            </>
-          )}
-        </div>
+              >
+                <motion.div
+                  animate={{ y: [0, -3, 0] }}
+                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                >
+                  <UploadIcon size={36} color={dragOver ? TXT_HI : LINE_HI} />
+                </motion.div>
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{
+                    color: dragOver ? TXT_HI : TXT_MID,
+                    fontSize: 13, fontWeight: 400, marginBottom: 6,
+                    transition: 'color 0.2s',
+                  }}>
+                    {dragOver ? '여기에 놓으세요' : '영상을 드래그하거나 클릭'}
+                  </p>
+                  <p style={{
+                    color: TXT_VDIM, fontSize: 9,
+                    letterSpacing: '0.16em', fontFamily: FONT_MONO,
+                  }}>
+                    MP4 · AVI · MOV · MAX 500MB
+                  </p>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="preview"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={EASE_OUT}
+                style={{ width: '100%', height: '100%', position: 'relative' }}
+              >
+                <video
+                  src={previewUrl.current}
+                  autoPlay loop muted playsInline
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 50%)',
+                  pointerEvents: 'none',
+                }} />
+                <div style={{
+                  position: 'absolute', bottom: 10, left: 12, right: 12,
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <span style={{
+                    color: TXT_HI, fontSize: 10, fontWeight: 500,
+                    letterSpacing: '0.05em',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    maxWidth: '70%',
+                  }}>{file.name}</span>
+                  <span style={{
+                    color: TXT_DIM, fontSize: 9,
+                    fontFamily: FONT_MONO, letterSpacing: '0.08em',
+                  }}>{formatSize(file.size)}</span>
+                </div>
+                <button
+                  onClick={e => { e.stopPropagation(); setFile(null); setError(''); }}
+                  style={{
+                    position: 'absolute', top: 10, right: 10,
+                    background: 'rgba(0,0,0,0.7)',
+                    border: `1px solid ${LINE_MID}`,
+                    color: TXT_MID,
+                    padding: '3px 9px',
+                    fontSize: 9,
+                    cursor: 'pointer',
+                    fontFamily: FONT_MONO,
+                    letterSpacing: '0.1em',
+                  }}
+                >CHANGE</button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
 
         {/* Error */}
-        {error && (
-          <div style={{
-            background: 'rgba(255,34,0,0.08)', border: '1px solid rgba(255,34,0,0.3)',
-            borderRadius: 8, padding: '8px 12px', marginBottom: 8,
-            color: '#ff6644', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            ⚠ {error}
-          </div>
-        )}
+        <AnimatePresence>
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={EASE_OUT}
+              style={{
+                background: 'rgba(194,90,90,0.06)',
+                border: '1px solid rgba(194,90,90,0.25)',
+                padding: '8px 12px',
+                marginBottom: 12,
+                color: '#d18585',
+                fontSize: 11,
+                letterSpacing: '0.02em',
+              }}
+            >
+              {error}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* CTA */}
-        {file && (
-          <button
-            onClick={startAnalysis}
-            style={{
-              width: '100%', padding: '12px',
-              background: 'transparent',
-              border: `1.5px solid ${C_CYAN}`,
-              borderRadius: 8,
-              color: C_CYAN,
-              fontSize: 13, fontWeight: 700,
-              cursor: 'pointer', fontFamily: FONT,
-              letterSpacing: '0.12em',
-              boxShadow: `0 0 18px rgba(0,229,255,0.18)`,
-              animation: 'fadeIn 0.3s ease',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(0,229,255,0.08)';
-              e.currentTarget.style.boxShadow = `0 0 28px rgba(0,229,255,0.3)`;
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.boxShadow = `0 0 18px rgba(0,229,255,0.18)`;
-            }}
-          >
-            분석하기 →
-          </button>
-        )}
-      </div>
-    </div>
+        {/* CTA — pill button like reference */}
+        <AnimatePresence>
+          {file && (
+            <motion.button
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={EASE_OUT}
+              whileHover={{ scale: 1.005 }}
+              whileTap={{ scale: 0.995 }}
+              onClick={() => setAnalyzing(true)}
+              style={{
+                width: '100%', padding: '14px 24px',
+                background: 'transparent',
+                border: `1px solid ${LINE_HI}`,
+                borderRadius: 100,
+                color: TXT_HI,
+                fontSize: 12, fontWeight: 400,
+                cursor: 'pointer',
+                fontFamily: FONT,
+                letterSpacing: '0.18em',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                transition: 'border-color 0.25s, background 0.25s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = TXT_HI;
+                e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = LINE_HI;
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <span>ANALYZE</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  width: 24, height: 1, background: TXT_HI,
+                }} />
+                <span>→</span>
+              </span>
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
   );
 }
