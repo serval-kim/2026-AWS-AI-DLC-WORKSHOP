@@ -156,3 +156,99 @@
 1. THE Simulator SHALL 분석 결과 화면에 "본 분석은 AI 추정치이며 법적 효력이 없습니다" 면책 문구를 표시한다
 2. THE Simulator SHALL 릴스 영상 내에 "AI 분석 결과 - 참고용" 워터마크를 포함한다
 3. WHEN 사용자가 분석을 시작하기 전에, THE Simulator SHALL 면책 조항 동의를 요청한다
+
+---
+
+## Deployment Strategy (배포 전략)
+
+### 배포 아키텍처
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          AWS Cloud (us-east-1)                       │
+│                                                                     │
+│  ┌──────────────┐    ┌──────────────┐    ┌───────────────────────┐  │
+│  │ CloudFront   │───▶│ S3 (Static)  │    │ ECR                   │  │
+│  │ (프론트엔드)  │    │ React SPA    │    │ api-server / worker   │  │
+│  └──────────────┘    └──────────────┘    └───────────────────────┘  │
+│                                                                     │
+│  ┌──────────────┐    ┌──────────────┐    ┌───────────────────────┐  │
+│  │ ALB          │───▶│ ECS Fargate  │───▶│ ElastiCache Redis     │  │
+│  │ (API 라우팅)  │    │ api-server   │    │ (작업 큐)             │  │
+│  └──────────────┘    └──────────────┘    └───────────┬───────────┘  │
+│                                                      │              │
+│  ┌──────────────┐    ┌──────────────┐               ▼              │
+│  │ OpenSearch   │◀───│ EC2 (GPU)    │◀── RQ Worker 소비            │
+│  │ (법률 RAG)   │    │ worker       │                              │
+│  └──────────────┘    │ YOLOv8+추론  │    ┌───────────────────────┐  │
+│                      └──────────────┘    │ S3 (데이터)            │  │
+│  ┌──────────────┐                        │ 영상, 결과 JSON,       │  │
+│  │ Bedrock      │                        │ 릴스 MP4              │  │
+│  │ Titan/Claude │                        └───────────────────────┘  │
+│  │ Nova Reel    │                                                   │
+│  └──────────────┘                                                   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 컴포넌트별 배포 구성
+
+| 컴포넌트 | 서비스 | 사양 | 배포 방식 |
+|----------|--------|------|-----------|
+| 프론트엔드 (blackbox-analyzer) | S3 + CloudFront | 정적 호스팅 | `vite build` → S3 sync |
+| API 서버 (integration + serval/api) | ECS Fargate | 0.5 vCPU / 1GB | Blue/Green |
+| 분석 워커 (serval/worker) | EC2 `g5.xlarge` | GPU (YOLOv8 추론) | Rolling (Docker) |
+| 릴스 생성 (juan) | ECS Fargate | 1 vCPU / 2GB | Rolling |
+| 작업 큐 | ElastiCache Redis | `cache.t3.micro` | 관리형 |
+| 벡터 DB | OpenSearch 관리형 | 기존 도메인 유지 | — |
+| 시크릿 | Secrets Manager | credentials.env 대체 | 컨테이너 환경변수 주입 |
+
+### CI/CD 파이프라인
+
+```
+PR 생성 → Lint + Unit Test → Docker Build → ECR Push
+                                                │
+Main Merge ─────────────────────────────────────┘
+    │
+    ├─ api-server: ECS Blue/Green Deploy
+    ├─ worker: EC2 Docker Pull + Restart
+    └─ frontend: S3 Sync + CloudFront Invalidation
+```
+
+- **도구**: GitHub Actions
+- **테스트 게이트**: Unit Test + PBT 전체 통과 필수
+- **롤백**: ECS 이전 태스크 정의로 즉시 롤백 가능
+
+### 스케일링 전략
+
+| 대상 | 트리거 | 액션 |
+|------|--------|------|
+| API 서버 | 요청 수 > 100 req/s | Fargate 태스크 수 증가 (1→3) |
+| GPU 워커 | Redis 큐 깊이 > 5 | EC2 인스턴스 추가 (Spot) |
+| GPU 워커 | 큐 비어있음 10분 | 인스턴스 중지 (비용 절감) |
+
+### 비용 최적화
+
+- **GPU 워커**: Spot Instance 활용 (g5.xlarge on-demand $1.006/h → Spot ~$0.35/h)
+- **Nova Reel**: Parallel 모드로 샷 동시 생성 (대기 시간 90초/샷 → 90초/씬)
+- **S3**: 임시 분석 파일 7일 후 자동 삭제 (라이프사이클 정책)
+- **OpenSearch**: 사용량 낮으면 Serverless 전환 검토
+
+### 모니터링
+
+| 영역 | 구현 | 알람 조건 |
+|------|------|-----------|
+| 로그 | structlog JSON → CloudWatch Logs | 에러율 > 5% |
+| 큐 상태 | Redis INFO → CloudWatch Custom Metric | 큐 적체 > 10건 |
+| 분석 시간 | job 시작~완료 타임스탬프 | 소요 시간 > 5분 |
+| 워커 상태 | ECS/EC2 헬스체크 | 연속 실패 3회 |
+| Bedrock | boto3 ClientError 카운트 | throttling > 10회/분 |
+
+### 시크릿 관리
+
+현재 `credentials.env` 파일 기반 → 프로덕션에서는 AWS Secrets Manager로 전환:
+
+| 시크릿 | 현재 | 프로덕션 |
+|--------|------|----------|
+| AWS 자격증명 | 환경변수 파일 | ECS Task Role (IAM) |
+| OpenSearch 비밀번호 | `.env` 파일 | Secrets Manager |
+| S3 버킷명 | 하드코딩 | SSM Parameter Store |
