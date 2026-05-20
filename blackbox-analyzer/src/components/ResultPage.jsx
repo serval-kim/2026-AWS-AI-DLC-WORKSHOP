@@ -2,31 +2,48 @@ import React, { useState } from "react";
 
 const FONT = "'Pretendard', -apple-system, sans-serif";
 
-const MOCK = {
-  id: "ANA-2026-0520-7842",
-  type: "끼어들기 후 추돌",
-  verdict: "7:3",
-  fault: { a: 70, b: 30 },
-  faultLabel: { a: "상대 차량", b: "내 차량" },
-  laws: [
-    "도로교통법 제19조 (안전거리 확보)",
-    "도로교통법 제23조 (끼어들기 금지)",
-  ],
-  precedent: "대법원 2023다45821 유사 판례",
-  timeline: [
-    { time: "00:02", event: "상대 차량 1차선 진입 시도" },
-    { time: "00:04", event: "방향지시등 없이 차선 변경" },
-    { time: "00:06", event: "충돌 발생" },
-    { time: "00:08", event: "양 차량 정차" },
-  ],
-  script: {
-    intro: "자, 보시죠. 이 영상 한번 보겠습니다.",
-    analysis:
-      "상대방 차량이 방향지시등도 켜지 않고 갑자기 끼어들었습니다. 이건 명백한 끼어들기 위반이에요.",
-    conclusion:
-      "제 판단은 이렇습니다. 7대 3. 끼어든 차량이 7, 당한 차량이 3입니다.",
-  },
-};
+
+function _formatTime(sec) {
+  if (sec == null) return "00:00";
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+
+function deriveResult(analysisResult) {
+  if (!analysisResult) return null;
+  const sa = analysisResult.structuredAnalysis;
+  const sc = analysisResult.script?.script;
+  if (!sa && !sc) return null;
+
+  const ratios = sa?.conclusion?.fault_ratios || [];
+  const a = ratios[0]?.ratio_percent ?? 0;
+  const b = ratios[1]?.ratio_percent ?? Math.max(0, 100 - a);
+
+  const timeline = (sa?.analysis?.driver_actions || []).map(da => ({
+    time: _formatTime(da.timestamp?.start ?? 0),
+    event: `차량${da.vehicle_id ?? "?"} — ${da.action ?? ""}`,
+  }));
+
+  return {
+    id: sa?.job_id ?? analysisResult.script?.job_id ?? "-",
+    type: sa?.intro?.accident_type ?? sa?.intro?.summary ?? "사고 분석",
+    fault: { a, b },
+    faultLabel: {
+      a: `차량 ${ratios[0]?.vehicle_id ?? "A"}`,
+      b: `차량 ${ratios[1]?.vehicle_id ?? "B"}`,
+    },
+    verdict: `${a}:${b}`,
+    laws: sa?.conclusion?.legal_basis || [],
+    precedent: sa?.conclusion?.disclaimer ?? "",
+    timeline,
+    script: {
+      intro: sc?.intro?.text ?? "",
+      analysis: sc?.analysis?.text ?? "",
+      conclusion: sc?.conclusion?.text ?? "",
+    },
+  };
+}
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const S = {
@@ -91,7 +108,7 @@ const S = {
 };
 
 // ─── Fault bar ────────────────────────────────────────────────────────────────
-function FaultBar({ a, b }) {
+function FaultBar({ a, b, labelA, labelB }) {
   return (
     <div>
       <div
@@ -145,7 +162,7 @@ function FaultBar({ a, b }) {
             {a}%
           </div>
           <div style={{ fontSize: 11, color: "#8b8e96", marginTop: 4 }}>
-            {MOCK.faultLabel.a}
+            {labelA}
           </div>
         </div>
         <div
@@ -159,7 +176,7 @@ function FaultBar({ a, b }) {
             {b}%
           </div>
           <div style={{ fontSize: 11, color: "#8b8e96", marginTop: 4 }}>
-            {MOCK.faultLabel.b}
+            {labelB}
           </div>
         </div>
       </div>
@@ -289,18 +306,36 @@ export default function ResultPage({ file, analysisResult, onReset }) {
   const [activeTab, setActiveTab] = useState("fault");
   const [liveSubtitle, setLiveSubtitle] = useState("");
 
-  // file prop이 File 객체면 Object URL 생성, 없으면 fallback
+  const result = React.useMemo(() => deriveResult(analysisResult), [analysisResult]);
+
   const videoSrc = React.useMemo(() => {
     if (file instanceof File) return URL.createObjectURL(file);
-    return "/bb_h264.mp4"; // 개발용 fallback
+    return "/bb_h264.mp4";
   }, [file]);
 
-  // 컴포넌트 언마운트 시 Object URL 해제 (메모리 누수 방지)
   React.useEffect(() => {
     return () => {
       if (file instanceof File) URL.revokeObjectURL(videoSrc);
     };
   }, [videoSrc]);
+
+  if (!result) {
+    return (
+      <div style={{
+        ...S.page,
+        alignItems: "center", justifyContent: "center",
+        flexDirection: "column", gap: 16,
+      }}>
+        <p style={{ color: "#8b8e96", fontSize: 14 }}>분석 결과가 없습니다.</p>
+        <button onClick={onReset} style={{
+          padding: "8px 16px", background: "transparent",
+          border: "1px solid rgba(255,255,255,0.18)",
+          borderRadius: 100, color: "#c8cad0",
+          fontSize: 12, cursor: "pointer", fontFamily: FONT,
+        }}>다시 시도</button>
+      </div>
+    );
+  }
 
   const tabs = [
     { id: "fault", label: "과실비율" },
@@ -401,7 +436,7 @@ export default function ResultPage({ file, analysisResult, onReset }) {
             >
               사고 분석 결과
             </h1>
-            <p style={{ fontSize: 11, color: "#54565c" }}>ID: {MOCK.id}</p>
+            <p style={{ fontSize: 11, color: "#54565c" }}>ID: {result.id}</p>
           </div>
           <button
             onClick={onReset}
@@ -445,7 +480,7 @@ export default function ResultPage({ file, analysisResult, onReset }) {
               사고 유형
             </p>
             <p style={{ fontSize: 16, fontWeight: 600, color: "#fafafc" }}>
-              {MOCK.type}
+              {result.type}
             </p>
           </div>
           <div style={{ textAlign: "center" }}>
@@ -453,14 +488,14 @@ export default function ResultPage({ file, analysisResult, onReset }) {
               AI 판결
             </p>
             <div style={{ fontSize: 36, fontWeight: 700, color: "#c25a5a" }}>
-              {MOCK.verdict}
+              {result.verdict}
             </div>
           </div>
           <div style={{ textAlign: "right" }}>
             <p style={{ fontSize: 10, color: "#8b8e96", marginBottom: 4 }}>
               관련 법규
             </p>
-            {MOCK.laws.map((l) => (
+            {result.laws.map((l) => (
               <p key={l} style={{ fontSize: 11, color: "#8b8e96" }}>
                 · {l}
               </p>
@@ -501,9 +536,9 @@ export default function ResultPage({ file, analysisResult, onReset }) {
           {activeTab === "fault" && (
             <div style={S.card}>
               <p style={{ fontSize: 11, color: "#54565c", marginBottom: 16 }}>
-                {MOCK.precedent}
+                {result.precedent}
               </p>
-              <FaultBar a={MOCK.fault.a} b={MOCK.fault.b} />
+              <FaultBar a={result.fault.a} b={result.fault.b} />
             </div>
           )}
 
@@ -520,7 +555,7 @@ export default function ResultPage({ file, analysisResult, onReset }) {
                     background: "rgba(255,255,255,0.08)",
                   }}
                 />
-                {MOCK.timeline.map((item, i) => (
+                {result.timeline.map((item, i) => (
                   <div
                     key={i}
                     style={{
@@ -565,17 +600,17 @@ export default function ResultPage({ file, analysisResult, onReset }) {
               {[
                 {
                   label: "도입부",
-                  text: MOCK.script.intro,
+                  text: result.script.intro,
                   time: "00:00~00:10",
                 },
                 {
                   label: "분석부",
-                  text: MOCK.script.analysis,
+                  text: result.script.analysis,
                   time: "00:10~00:45",
                 },
                 {
                   label: "결론부",
-                  text: MOCK.script.conclusion,
+                  text: result.script.conclusion,
                   time: "00:45~01:00",
                 },
               ].map((s, i) => (
@@ -651,12 +686,12 @@ export default function ResultPage({ file, analysisResult, onReset }) {
                 {/* VideoTemplate + VideoEngine 통합 */}
                 <div style={{ display: "flex", justifyContent: "center" }}>
                   <VideoTemplate
-                    titleLine1={MOCK_RESULT.accidentType.split(" ")[0]}
+                    titleLine1={result.type.split(" ")[0]}
                     titleLine2={
-                      MOCK_RESULT.accidentType.split(" ").slice(1).join(" ") ||
+                      result.type.split(" ").slice(1).join(" ") ||
                       "사고 분석"
                     }
-                    subtitle={liveSubtitle || MOCK_RESULT.script.conclusion}
+                    subtitle={liveSubtitle || result.script.conclusion}
                     subtitleLabel="AI 판결"
                     scale={0.28}
                     style={{

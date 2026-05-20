@@ -1,178 +1,143 @@
-"""Integration API Server — FastAPI.
+"""Integration API Server — FastAPI
 
-Provides HTTP endpoints for the E2E pipeline:
-  POST /analyze — Start analysis (accepts video_s3_key)
-  GET /jobs/{job_id} — Poll job status
-  GET /files/{job_id}/{filename} — Serve generated files
+흐름:
+  POST /analyze (video_s3_key 필수)
+    → Serval AnalysisPipeline 인프로세스 호출 → StructuredAnalysis
+    → muncheol_translator (Bedrock 1회) → 문철어 스크립트
+    → Juan 파이프라인 (TTS + Nova Reel)
 """
-
-import os
 import json
+import os
+import sys
 from pathlib import Path
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import BackgroundTasks, FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
-import structlog
+from pydantic import BaseModel
 import uvicorn
 
-logger = structlog.get_logger(__name__)
-
-app = FastAPI(title="한문철 릴스 생성 API", version="0.2.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# In-memory job store
-jobs: dict[str, dict] = {}
-
 BASE_DIR = Path(__file__).parent.parent
+SERVAL_DIR = BASE_DIR / "ad-hoc" / "serval"
+JUAN_DIR = BASE_DIR / "ad-hoc" / "juan" / "hanmuncheol-reels"
 
+# Serval 먼저, Juan 나중에 insert → Juan의 `from config import` 우선 해결
+sys.path.insert(0, str(SERVAL_DIR))
+sys.path.insert(0, str(JUAN_DIR))
 
-# --- Request/Response Models (SECURITY-05: Input Validation) ---
+app = FastAPI(title="한문철 릴스 생성 API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+jobs: dict = {}
 
 
 class AnalyzeRequest(BaseModel):
-    """POST /analyze request body."""
-
-    video_s3_key: str = Field(
-        min_length=1,
-        max_length=500,
-        description="S3 key of the input video file",
-    )
-    mode: str = Field(
-        default="parallel",
-        pattern=r"^(parallel|sequential)$",
-        description="Juan pipeline execution mode",
-    )
+    video_s3_key: str
+    mode: str = "parallel"  # juan video_gen mode: "serial" | "parallel"
 
 
-class JobResponse(BaseModel):
-    """Standard job status response."""
+def _run_serval_analysis(job_id: str, video_s3_key: str) -> dict:
+    """Serval AnalysisPipeline을 인프로세스 호출 → StructuredAnalysis dict 반환."""
+    from worker.pipeline import AnalysisPipeline
+    from shared.clients.s3_client import S3Client
 
-    job_id: str
-    status: str
-    script: dict | None = None
-    videoUrl: str | None = None
-    audioUrls: dict | None = None
-    errors: list[dict] | None = None
-    partial_results: dict | None = None
+    pipeline = AnalysisPipeline()
+    pipeline.run(job_id=job_id, video_s3_key=video_s3_key, callback_url="")
+
+    s3 = S3Client()
+    job = s3.get_job_status(job_id)
+    if job is None or not job.result_keys.structured_analysis:
+        raise RuntimeError(f"Serval structured_analysis 산출 실패: status={job.status if job else 'missing'}")
+
+    return s3.download_json(job.result_keys.structured_analysis)
 
 
-# --- Background Tasks ---
-
-
-def _run_full_pipeline(job_id: str, video_s3_key: str, mode: str) -> None:
-    """Background task: run the full E2E pipeline."""
-    log = logger.bind(job_id=job_id)
-    log.info("background_pipeline_start", video_s3_key=video_s3_key, mode=mode)
-
+def _run_pipeline(job_id: str, video_s3_key: str, mode: str):
+    output_dir = f"/tmp/jobs/{job_id}"
+    os.makedirs(output_dir, exist_ok=True)
     try:
-        from api import run_pipeline
-        result = run_pipeline(video_s3_key=video_s3_key)
+        structured = _run_serval_analysis(job_id, video_s3_key)
+        jobs[job_id]["structured_analysis"] = structured
 
-        jobs[job_id]["status"] = result["status"]
+        from muncheol_translator import translate_to_muncheol
+        script = translate_to_muncheol(structured)
+        jobs[job_id]["script"] = script
 
-        if result["status"] == "completed":
-            jobs[job_id]["script"] = result.get("script")
-            jobs[job_id]["videoPath"] = result.get("videoPath")
-            jobs[job_id]["outputDir"] = result.get("outputDir")
-            jobs[job_id]["audioPaths"] = result.get("audioPaths", [])
-        elif result["status"] == "partial":
-            jobs[job_id]["partial_results"] = result.get("partial_results")
-            jobs[job_id]["errors"] = result.get("errors", [])
-        else:
-            jobs[job_id]["errors"] = result.get("errors", [])
+        script_path = f"{output_dir}/script.json"
+        with open(script_path, "w") as f:
+            json.dump(script, f, ensure_ascii=False)
 
-        log.info("background_pipeline_complete", status=result["status"])
+        from pipeline import run_pipeline as juan_pipeline
+        result = juan_pipeline(script_path, f"{output_dir}/output", mode=mode)
 
+        jobs[job_id]["status"] = "completed"
+        jobs[job_id]["videoPath"] = result
+        jobs[job_id]["outputDir"] = f"{output_dir}/output"
     except Exception as e:
-        # SECURITY-09: No stack trace in response
-        log.error("background_pipeline_exception", error=str(e))
         jobs[job_id]["status"] = "failed"
-        jobs[job_id]["errors"] = [
-            {"stage": "pipeline", "error_type": "UNEXPECTED", "message": "Internal processing error"}
-        ]
+        jobs[job_id]["error"] = str(e)
 
 
-# --- Endpoints ---
+@app.post("/upload")
+async def upload(file: UploadFile = File(...)):
+    """블랙박스 영상 → S3 업로드. video_s3_key 반환."""
+    from shared.clients.s3_client import S3Client
+    import uuid
+
+    suffix = (file.filename or "video.mp4").rsplit(".", 1)[-1].lower()
+    if suffix not in ("mp4", "mov", "avi"):
+        suffix = "mp4"
+    s3_key = f"accident-videos/upload-{uuid.uuid4().hex[:8]}.{suffix}"
+
+    tmp_path = f"/tmp/upload_{uuid.uuid4().hex[:8]}.{suffix}"
+    with open(tmp_path, "wb") as f:
+        f.write(await file.read())
+
+    s3 = S3Client()
+    s3.upload_file(tmp_path, s3_key)
+    os.remove(tmp_path)
+    return {"video_s3_key": s3_key}
 
 
-@app.post("/analyze", response_model=JobResponse)
-async def analyze(request: AnalyzeRequest, background_tasks: BackgroundTasks):
-    """Start analysis pipeline.
-
-    Accepts video_s3_key and dispatches background processing.
-    Returns immediately with job_id for status polling.
-    """
+@app.post("/analyze")
+async def analyze(req: AnalyzeRequest, background_tasks: BackgroundTasks):
     import uuid
     job_id = str(uuid.uuid4())[:8]
-    log = logger.bind(job_id=job_id)
-    log.info("analyze_request", video_s3_key=request.video_s3_key, mode=request.mode)
-
-    jobs[job_id] = {"status": "processing"}
-    background_tasks.add_task(_run_full_pipeline, job_id, request.video_s3_key, request.mode)
-
-    return JobResponse(job_id=job_id, status="processing")
+    jobs[job_id] = {"status": "processing", "video_s3_key": req.video_s3_key}
+    background_tasks.add_task(_run_pipeline, job_id, req.video_s3_key, req.mode)
+    return {"job_id": job_id, "status": "processing"}
 
 
-@app.get("/jobs/{job_id}", response_model=JobResponse)
+@app.get("/jobs/{job_id}")
 async def get_job(job_id: str):
-    """Poll job status."""
     if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-
+        return {"error": "not found"}, 404
     job = jobs[job_id]
-    response = JobResponse(job_id=job_id, status=job["status"])
-
+    result = {
+        "job_id": job_id,
+        "status": job["status"],
+        "script": job.get("script"),
+        "structured_analysis": job.get("structured_analysis"),
+    }
     if job["status"] == "completed":
-        response.script = job.get("script")
-        response.videoUrl = f"/files/{job_id}/hanmuncheol_reels.mp4"
-        response.audioUrls = {
+        result["videoUrl"] = f"/files/{job_id}/hanmuncheol_reels.mp4"
+        result["audioUrls"] = {
             "intro": f"/files/{job_id}/intro_tts.mp3",
             "analysis": f"/files/{job_id}/analysis_tts.mp3",
             "conclusion": f"/files/{job_id}/conclusion_tts.mp3",
         }
-    elif job["status"] in ("partial", "failed"):
-        response.errors = job.get("errors")
-        response.partial_results = job.get("partial_results")
-
-    return response
+    elif job["status"] == "failed":
+        result["error"] = job.get("error")
+    return result
 
 
 @app.get("/files/{job_id}/{filename}")
 async def serve_file(job_id: str, filename: str):
-    """Serve generated output files."""
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
-
-    job = jobs[job_id]
-    output_dir = job.get("outputDir")
-    if not output_dir:
-        raise HTTPException(status_code=404, detail="No output available")
-
-    path = Path(output_dir) / filename
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-
-    # SECURITY-09: Prevent path traversal
-    try:
-        path.resolve().relative_to(Path(output_dir).resolve())
-    except ValueError:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    media_type = "video/mp4" if filename.endswith(".mp4") else "audio/mpeg"
-    return FileResponse(path, media_type=media_type)
-
-
-@app.get("/health")
-async def health():
-    """Health check endpoint."""
-    return {"status": "healthy", "version": "0.2.0"}
+    path = Path(f"/tmp/jobs/{job_id}/output/{filename}")
+    if path.exists():
+        media_type = "video/mp4" if filename.endswith(".mp4") else "audio/mpeg"
+        return FileResponse(path, media_type=media_type)
+    return {"error": "not found"}, 404
 
 
 if __name__ == "__main__":
