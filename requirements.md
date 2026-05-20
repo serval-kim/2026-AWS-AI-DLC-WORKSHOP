@@ -4,6 +4,14 @@
 
 블랙박스 영상을 업로드하면 AI가 사고 상황을 분석하여 과실비율을 판단하고, 한문철 변호사 스타일의 숏폼 릴스 영상을 자동 생성하는 시뮬레이터. MVP 범위에서는 3D 재구성을 제외하고, 핵심 파이프라인인 "영상 분석 → 과실비율 산출 → 스크립트 생성 → 한문철 스타일 릴스 출력"에 집중한다. 본 시스템의 분석 결과는 AI 추정치이며 법적 효력이 없음을 명시한다.
 
+## Implementation Constraints
+
+- **실행 환경**: 모든 모듈은 로컬 Docker 컨테이너로 실행한다 (docker-compose 기반)
+- **AWS 인증**: `credentials.env` 파일에 AWS credential을 정의하고, Docker 컨테이너에 환경변수로 주입한다
+- **AWS 서비스**: Bedrock (LLM, Embedding), S3 등 필요한 AWS 서비스는 해당 credential로 접근 가능하다
+- **LLM**: AWS Bedrock (boto3 bedrock-runtime 사용)
+- **언어/프레임워크**: Python 기반 서비스
+
 ## Glossary
 
 - **Simulator**: 블랙박스 사고 분석 및 릴스 생성 시스템 전체
@@ -45,6 +53,14 @@
 5. IF 영상에서 차량이 탐지되지 않으면, THEN THE Video_Analyzer SHALL 차량 미탐지 오류를 반환하고 분석을 중단한다
 6. IF 영상 파일이 손상되어 프레임 추출이 불가능하면, THEN THE Video_Analyzer SHALL 영상 손상 오류를 반환한다
 
+#### Implementation Spec
+
+- **프레임 추출**: FFmpeg (Docker 이미지 내 설치)
+- **객체 탐지**: YOLOv8 모델 (ultralytics, GPU/CPU 추론)
+- **차량 추적**: ByteTrack 또는 SORT 알고리즘으로 프레임 간 차량 ID 매칭
+- **사고 유형 분류**: 탐지된 궤적 데이터를 기반으로 규칙 기반 분류 로직
+- **입출력**: S3에서 영상 다운로드 → 분석 결과 JSON을 S3에 저장
+
 ### Requirement 3: 과실비율 판단
 
 **User Story:** 사용자로서, AI 기반 과실비율 분석 결과를 확인하여 사고 책임 소재를 파악할 수 있다.
@@ -57,17 +73,30 @@
 4. THE Fault_Analyzer SHALL 분석 결과에 "AI 추정치이며 법적 효력 없음" 면책 문구를 포함한다
 5. IF 사고 유형 판별이 불가능하면, THEN THE Fault_Analyzer SHALL 판단 불가 사유를 명시하고 수동 검토를 권고한다
 
-### Requirement 4: 상황 설명 스크립트 생성
+#### Implementation Spec
 
-**User Story:** 시스템으로서, 과실비율 분석 결과를 기반으로 사고 상황을 설명하는 나레이션 스크립트를 생성할 수 있다.
+- **RAG 벡터 DB**: Amazon OpenSearch Serverless 또는 로컬 ChromaDB (Docker)
+- **임베딩 모델**: AWS Bedrock - Titan Embeddings
+- **판례/법규 데이터**: 도로교통법 조항 및 교통사고 판례를 청크 단위로 벡터화하여 DB에 적재
+- **프롬프트 구성**: 영상 분석 JSON + RAG 검색 결과를 컨텍스트로 Claude에 전달, 과실비율 및 근거를 구조화된 JSON으로 응답 요청
+
+### Requirement 4: 구조화된 사고 분석 결과 생성
+
+**User Story:** 시스템으로서, 과실비율 분석 결과를 구조화된 데이터로 정리하여 후속 모듈(나레이션 스크립트, 릴스 편집)에서 활용할 수 있는 분석 output을 생성할 수 있다.
 
 #### Acceptance Criteria
 
-1. WHEN 과실비율 판단이 완료되면, THE Script_Generator SHALL 사고 상황 요약, 개별 운전자별 행동 분석, 타임라인, 과실비율 및 판단 근거를 포함한 분석 스크립트를 생성한다 - (한문철 영상 보고 더 넣기)
-2. THE Script_Generator SHALL 스크립트를 도입부(사고 상황 요약), 분석부(운전자별 행동 분석 및 코멘트), 결론부(과실비율 및 법적 근거) 3단 구조로 작성한다
-3. THE Script_Generator SHALL 스크립트의 각 구간에 대응하는 원본 영상 타임스탬프를 명시한다
-4. THE Script_Generator SHALL 스크립트 총 길이를 60초 이내 나레이션 분량으로 제한한다
-5. THE Script_Generator SHALL 스크립트를 JSON 형식으로 출력한다
+1. WHEN 과실비율 판단이 완료되면, THE Script_Generator SHALL 사고 상황 요약, 개별 운전자별 행동 분석, 사고 타임라인, 과실비율 및 판단 근거를 포함한 구조화된 분석 결과를 생성한다
+2. THE Script_Generator SHALL 분석 결과를 도입부(사고 상황 요약), 분석부(운전자별 행동 분석 및 과실 포인트), 결론부(과실비율 및 법적 근거) 3단 구조로 구성한다
+3. THE Script_Generator SHALL 분석 결과의 각 구간에 대응하는 원본 영상 타임스탬프(시작/종료 시간)를 포함한다
+4. THE Script_Generator SHALL 각 운전자의 핵심 과실 행위와 해당 법규 위반 사항을 개별 항목으로 분리하여 출력한다
+5. THE Script_Generator SHALL 분석 결과를 JSON 형식으로 출력하며, 각 구간(도입부/분석부/결론부)이 독립적으로 참조 가능한 구조로 제공한다
+
+#### Implementation Spec
+
+- **입력**: Req 3의 과실비율 판단 결과 JSON + 영상 분석 메타데이터(타임스탬프, 차량 궤적)
+- **프롬프트 구성**: 과실비율 결과와 영상 타임라인을 기반으로 3단 구조(도입부/분석부/결론부) JSON 생성을 요청
+- **출력 포맷**: JSON Schema로 응답 구조를 강제 (structured output)
 
 ### Requirement 5: 문철어 번역
 
