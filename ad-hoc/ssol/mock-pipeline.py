@@ -23,51 +23,71 @@ from pathlib import Path
 # Step 1: Mock 데이터
 # ============================================================
 
+# StructuredAnalysis (Req 4 output) 스키마 기반 Mock 데이터
 MOCK_FAULT_DATA = {
-    "analysis_id": "mock-001",
-    "accident_type": "추돌",
-    "vehicles": [
-        {
-            "id": "A",
-            "role": "가해",
-            "vehicle_type": "승용차 (흰색 소나타)",
-            "action": "전방 주시 태만 상태에서 급정거한 앞차를 추돌",
-            "speed_estimate": "약 60km/h",
-            "violations": ["안전거리 미확보", "전방주시 의무 위반"],
-        },
-        {
-            "id": "B",
-            "role": "피해",
-            "vehicle_type": "SUV (검정 투싼)",
-            "action": "정상 주행 중 전방 보행자 출현으로 급정거",
-            "speed_estimate": "약 50km/h → 0km/h",
-            "violations": ["급제동 시 비상등 미점등"],
-        },
-    ],
-    "fault_ratio": {"A": 70, "B": 30},
-    "legal_basis": [
-        "도로교통법 제19조 제1항 (안전거리 확보 의무)",
-        "도로교통법 제49조 제1항 제1호 (전방주시 의무)",
-        "대법원 2018다234567 판례: 추돌사고 시 후행차 기본과실 70%",
-        "B차량 급제동 시 비상등 미점등으로 과실 상계 적용",
-    ],
-    "timeline": [
-        {"timestamp": "00:01", "event": "A, B 차량 편도 2차로 도로 주행 중"},
-        {"timestamp": "00:03", "event": "B차량 전방 무단횡단 보행자 발견"},
-        {"timestamp": "00:03.5", "event": "B차량 급정거 (비상등 미점등)"},
-        {"timestamp": "00:04", "event": "A차량 핸드폰 조작 중 전방 상황 인지 실패"},
-        {"timestamp": "00:05", "event": "A차량 B차량 후미 추돌 (시속 약 40km/h)"},
-        {"timestamp": "00:06", "event": "충돌 후 A차량 정지, B차량 전방 2m 밀림"},
-    ],
-    "disclaimer": "본 분석은 AI 추정치이며 법적 효력이 없습니다.",
+    "job_id": "mock-001",
+    "intro": {
+        "summary": "편도 2차로 도로에서 앞차(B)가 무단횡단 보행자를 피해 급정거하자, 뒤따르던 차량(A)이 안전거리를 확보하지 못하고 추돌한 사고",
+        "accident_type": "rear_end",
+        "timestamp": {"start": 0.0, "end": 6.0},
+        "involved_vehicles": 2,
+    },
+    "analysis": {
+        "driver_actions": [
+            {
+                "vehicle_id": 1,
+                "action": "핸드폰 조작 중 전방 주시 태만 상태에서 급정거한 앞차를 인지하지 못하고 추돌",
+                "fault_point": "안전거리 미확보 및 전방주시 의무 위반",
+                "violated_law": "도로교통법 제19조 제1항 (안전거리 확보 의무)",
+                "timestamp": {"start": 1.0, "end": 5.0},
+            },
+            {
+                "vehicle_id": 2,
+                "action": "전방 무단횡단 보행자 발견 후 급정거, 비상등 미점등",
+                "fault_point": "급제동 시 비상등 미점등으로 후방 차량에 위험 초래",
+                "violated_law": "도로교통법 제38조 (신호 및 지시 위반)",
+                "timestamp": {"start": 3.0, "end": 5.0},
+            },
+        ],
+        "timestamp": {"start": 1.0, "end": 5.5},
+    },
+    "conclusion": {
+        "fault_ratios": [
+            {
+                "vehicle_id": 1,
+                "ratio_percent": 70,
+                "key_faults": ["안전거리 미확보", "전방주시 의무 위반", "핸드폰 조작"],
+                "violated_laws": [
+                    "도로교통법 제19조 제1항 (안전거리 확보 의무)",
+                    "도로교통법 제49조 제1항 제1호 (전방주시 의무)",
+                ],
+            },
+            {
+                "vehicle_id": 2,
+                "ratio_percent": 30,
+                "key_faults": ["급제동 시 비상등 미점등"],
+                "violated_laws": ["도로교통법 제38조 (신호 및 지시 위반)"],
+            },
+        ],
+        "legal_basis": [
+            "도로교통법 제19조 제1항 (안전거리 확보 의무)",
+            "도로교통법 제49조 제1항 제1호 (전방주시 의무)",
+            "대법원 2018다234567 판례: 추돌사고 시 후행차 기본과실 70%",
+            "B차량 급제동 시 비상등 미점등으로 과실 상계 적용",
+        ],
+        "timestamp": {"start": 5.0, "end": 6.0},
+        "disclaimer": "본 분석은 AI 추정치이며 법적 효력이 없습니다.",
+    },
+    "generated_at": "2026-05-20T00:00:00Z",
 }
 
 
 def get_mock_data() -> dict:
-    """Mock 과실비율 분석 데이터를 반환한다."""
-    print("[Step 1] Mock 과실비율 데이터 로드")
-    print(f"  사고 유형: {MOCK_FAULT_DATA['accident_type']}")
-    print(f"  과실비율: A({MOCK_FAULT_DATA['fault_ratio']['A']}%) : B({MOCK_FAULT_DATA['fault_ratio']['B']}%)")
+    """Mock StructuredAnalysis 데이터를 반환한다 (Req 4 output 스키마 기준)."""
+    print("[Step 1] Mock StructuredAnalysis 데이터 로드 (Req 4 output)")
+    ratios = {f"vehicle_{r['vehicle_id']}": r['ratio_percent'] for r in MOCK_FAULT_DATA['conclusion']['fault_ratios']}
+    print(f"  사고 유형: {MOCK_FAULT_DATA['intro']['accident_type']}")
+    print(f"  과실비율: {ratios}")
     print()
     return MOCK_FAULT_DATA
 
