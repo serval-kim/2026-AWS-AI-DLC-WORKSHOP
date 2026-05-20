@@ -33,7 +33,7 @@ from accident_rag.prompts import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_LLM_MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
+DEFAULT_LLM_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
 @dataclass
