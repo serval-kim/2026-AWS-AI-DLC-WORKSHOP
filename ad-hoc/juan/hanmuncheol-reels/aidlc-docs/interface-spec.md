@@ -86,6 +86,53 @@ output_path = run_pipeline("script.json", output_dir="/tmp/output")
 
 ---
 
+## AWS IAM 권한
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BedrockNovaReel",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:InvokeModel",
+        "bedrock:StartAsyncInvoke",
+        "bedrock:GetAsyncInvoke"
+      ],
+      "Resource": "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-reel-v1:1"
+    },
+    {
+      "Sid": "PollyTTS",
+      "Effect": "Allow",
+      "Action": "polly:SynthesizeSpeech",
+      "Resource": "*"
+    },
+    {
+      "Sid": "S3VideoOutput",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::${BUCKET_NAME}",
+        "arn:aws:s3:::${BUCKET_NAME}/*"
+      ]
+    }
+  ]
+}
+```
+
+| 서비스 | 용도 | 최소 권한 |
+|--------|------|-----------|
+| Bedrock | Nova Reel 영상 생성 | StartAsyncInvoke, GetAsyncInvoke |
+| Polly | TTS 음성 생성 | SynthesizeSpeech |
+| S3 | 영상 출력 저장/다운로드 | PutObject, GetObject |
+
+---
+
 ## 에러 처리
 
 | 상황 | 동작 |

@@ -34,3 +34,10 @@ test_output/
 
 # OS
 Thumbs.db
+ad-hoc/juan/*.mp4
+ad-hoc/juan/*.png
+ad-hoc/juan/image*
+ad-hoc/juan/nova_reel_*.py
+ad-hoc/juan/*.mp4
+ad-hoc/juan/*.png
+ad-hoc/juan/image*
