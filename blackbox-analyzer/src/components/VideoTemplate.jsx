@@ -23,6 +23,7 @@ export default function VideoTemplate({
   subtitleLabel = '스크립트 자막 영역',
   videoContent = null,
   personImage = null,
+  personVideo = null,
   scale = 0.35,
   className = '',
   style = {},
@@ -156,7 +157,7 @@ export default function VideoTemplate({
         </div>
 
         {/* 인물 영역 */}
-        <PersonSlot image={personImage} />
+        <PersonSlot image={personImage} video={personVideo} />
 
         {/* 하단 프레임 */}
         <HexFrame position="bottom" />
@@ -215,7 +216,7 @@ function HexFrame({ position }) {
 }
 
 /** 우측 하단 인물 슬롯 */
-function PersonSlot({ image }) {
+function PersonSlot({ image, video }) {
   return (
     <div style={{
       position: 'absolute',
@@ -227,7 +228,21 @@ function PersonSlot({ image }) {
       overflow: 'hidden',
       filter: 'drop-shadow(0 0 18px rgba(0,0,0,.65))',
     }}>
-      {image ? (
+      {video ? (
+        <video
+          src={video}
+          autoPlay
+          loop
+          muted={false}
+          playsInline
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            objectPosition: 'top center',
+          }}
+        />
+      ) : image ? (
         <img
           src={image}
           alt="인물"
