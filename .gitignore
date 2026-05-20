@@ -1,1 +1,36 @@
-node_modules/\n.DS_Store\n*.log
+node_modules/
+.DS_Store
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+.env
+
+# Testing
+.hypothesis/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# ML Models
+*.pt
+*.onnx
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Credentials (never commit)
+credentials.env
+
+# Test outputs (large files)
+test_output/
+
+# OS
+Thumbs.db
