@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "accident-rag"
+version = "0.1.0"
+description = "Traffic-accident RAG over Korean traffic law PDFs (Bedrock + OpenSearch)."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "boto3>=1.35.0",
+    "botocore>=1.35.0",
+    "python-dotenv>=1.0.0",
+    "pypdf>=4.0.0",
+    "opensearch-py>=2.6.0",
+    "requests-aws4auth>=1.3.0",
+]
+
+[project.scripts]
+accident-rag = "accident_rag.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
