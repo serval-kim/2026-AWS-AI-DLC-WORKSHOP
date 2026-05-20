@@ -4,7 +4,7 @@
 - **Project Type**: Brownfield (인테그레이션)
 - **Project Name**: 블랙박스 → 한문철 릴스 E2E 파이프라인
 - **Start Date**: 2026-05-20
-- **Current Stage**: CONSTRUCTION - Code Generation Complete (U6)
+- **Current Stage**: CONSTRUCTION - Build & Test Complete (U6)
 
 ## Workspace State
 - **Existing Code**: Yes (3개 모듈 + 프론트엔드)
@@ -34,11 +34,9 @@
 - [x] Construction - Code Generation (U1~U3 완료)
 - [x] Construction - Build & Test (MOCK E2E 통과 — U5)
 - [ ] U4: Frontend 연결 (deferred)
-- [ ] U6: Serval 실제 연결 (mock StructuredAnalysis 제거) ← 현재 진행
-  - [ ] Requirements (delta)
-  - [ ] Workflow Planning (delta)
-  - [ ] Functional Design
-  - [ ] NFR Requirements
-  - [ ] NFR Design
-  - [ ] Code Generation
-  - [ ] Build & Test
+- [ ] U6: Serval 실제 연결 (mock StructuredAnalysis 제거) ← 완료
+  - [x] Requirements (delta)
+  - [x] Workflow Planning (delta)
+  - [x] Functional Design
+  - [x] Code Generation
+  - [x] Build & Test
