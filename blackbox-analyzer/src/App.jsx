@@ -8,6 +8,7 @@ import ResultPage from './components/ResultPage';
 export default function App() {
   const [stage, setStage] = useState('disclaimer');
   const [file, setFile] = useState(null);
+  const [analysisResult, setAnalysisResult] = useState(null);
 
   function handleAcceptDisclaimer() {
     setStage('upload');
@@ -18,12 +19,14 @@ export default function App() {
     setStage('analyzing');
   }
 
-  function handleAnalysisComplete() {
+  function handleAnalysisComplete(result) {
+    setAnalysisResult(result);
     setStage('result');
   }
 
   function handleReset() {
     setFile(null);
+    setAnalysisResult(null);
     setStage('upload');
   }
 
@@ -39,7 +42,7 @@ export default function App() {
         <AnalyzingPage file={file} onComplete={handleAnalysisComplete} />
       )}
       {stage === 'result' && (
-        <ResultPage file={file} onReset={handleReset} />
+        <ResultPage file={file} analysisResult={analysisResult} onReset={handleReset} />
       )}
     </div>
   );
