@@ -28,55 +28,78 @@ def trim_video(input_path: str, duration: float, output_path: str) -> str:
     return output_path
 
 
-def generate_shot(prompt: str, image_path: str, s3_prefix: str) -> str:
+def generate_shot(prompt: str, image_path: str, s3_prefix: str, max_retries: int = 2) -> str:
     """
-    단일 6초 샷 생성.
+    단일 6초 샷 생성. 실패 시 최대 2회 재시도 (2회째는 seed 변경).
     반환: 로컬 다운로드된 mp4 경로
     """
+    import os
+    mock = os.environ.get("MOCK_VIDEO_GEN", "").lower() == "true"
+    if mock:
+        # Mock: 더미 영상 생성
+        import subprocess
+        local_path = f"/tmp/mock_{s3_prefix.replace('/', '_')}.mp4"
+        subprocess.run([
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=gray:s=1280x720:d=6",
+            "-c:v", "libx264", local_path,
+        ], capture_output=True)
+        print(f"[VideoGen] MOCK: {local_path}")
+        return local_path
+
     session = get_session()
     bedrock = session.client("bedrock-runtime")
     s3 = session.client("s3")
-
     image_b64 = _image_to_base64(image_path)
-    s3_uri = f"s3://{S3_BUCKET}/{s3_prefix}/"
 
-    response = bedrock.start_async_invoke(
-        modelId=MODEL_ID,
-        modelInput={
-            "taskType": "TEXT_VIDEO",
-            "textToVideoParams": {
-                "text": prompt,
-                "images": [{"format": "png", "source": {"bytes": image_b64}}],
-            },
-            "videoGenerationConfig": {
-                "durationSeconds": SHOT_DURATION,
-                "fps": 24,
-                "dimension": "1280x720",
-                "seed": int(time.time()) % 2147483648,
-            },
-        },
-        outputDataConfig={"s3OutputDataConfig": {"s3Uri": s3_uri}},
-    )
+    for attempt in range(max_retries):
+        seed = int(time.time()) % 2147483648 if attempt == 0 else int(time.time() + 999) % 2147483648
+        s3_uri = f"s3://{S3_BUCKET}/{s3_prefix}/"
 
-    arn = response["invocationArn"]
-    job_id = arn.split("/")[-1]
-    print(f"[VideoGen] Started: {job_id}")
+        try:
+            response = bedrock.start_async_invoke(
+                modelId=MODEL_ID,
+                modelInput={
+                    "taskType": "TEXT_VIDEO",
+                    "textToVideoParams": {
+                        "text": prompt,
+                        "images": [{"format": "png", "source": {"bytes": image_b64}}],
+                    },
+                    "videoGenerationConfig": {
+                        "durationSeconds": SHOT_DURATION,
+                        "fps": 24,
+                        "dimension": "1280x720",
+                        "seed": seed,
+                    },
+                },
+                outputDataConfig={"s3OutputDataConfig": {"s3Uri": s3_uri}},
+            )
 
-    while True:
-        status = bedrock.get_async_invoke(invocationArn=arn)
-        state = status["status"]
-        if state == "Completed":
-            break
-        elif state == "Failed":
-            raise RuntimeError(f"Shot generation failed: {status.get('failureMessage')}")
-        time.sleep(15)
+            arn = response["invocationArn"]
+            job_id = arn.split("/")[-1]
+            print(f"[VideoGen] Started: {job_id} (attempt {attempt+1})")
 
-    # S3에서 다운로드
-    local_path = f"/tmp/{job_id}.mp4"
-    s3_key = f"{s3_prefix}/{job_id}/output.mp4"
-    s3.download_file(S3_BUCKET, s3_key, local_path)
-    print(f"[VideoGen] Done: {local_path}")
-    return local_path
+            timeout = 180  # 3분
+            elapsed = 0
+            while elapsed < timeout:
+                status = bedrock.get_async_invoke(invocationArn=arn)
+                state = status["status"]
+                if state == "Completed":
+                    local_path = f"/tmp/{job_id}.mp4"
+                    s3_key = f"{s3_prefix}/{job_id}/output.mp4"
+                    s3.download_file(S3_BUCKET, s3_key, local_path)
+                    print(f"[VideoGen] Done: {local_path}")
+                    return local_path
+                elif state == "Failed":
+                    raise RuntimeError(status.get("failureMessage", "unknown"))
+                time.sleep(15)
+                elapsed += 15
+
+            raise TimeoutError(f"Shot generation timed out after {timeout}s")
+
+        except Exception as e:
+            print(f"[VideoGen] Attempt {attempt+1} failed: {e}")
+            if attempt == max_retries - 1:
+                raise RuntimeError(f"Shot generation failed after {max_retries} attempts: {e}")
 
 
 def generate_scene_video(prompts: list[str], initial_image: str,

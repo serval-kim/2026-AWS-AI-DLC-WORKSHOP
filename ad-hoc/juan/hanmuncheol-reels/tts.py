@@ -1,5 +1,6 @@
 """Polly TTS - duration SSOT에 맞춰 속도 조절"""
 import subprocess
+import os
 import tempfile
 from config import get_session, POLLY_VOICE, POLLY_ENGINE
 
@@ -57,4 +58,27 @@ def generate_tts(text: str, duration_sec: int, output_path: str,
 
     final_duration = _get_audio_duration(output_path)
     print(f"[TTS] target={duration_sec}s, actual={final_duration:.1f}s, rate={rate_percent}%")
+
+    # SSOT 보정: 오차 처리
+    diff = final_duration - duration_sec
+    if abs(diff) > 0.3:
+        if diff < 0:
+            # 짧음 → silence padding
+            padded = output_path + ".padded.mp3"
+            subprocess.run([
+                "ffmpeg", "-y", "-i", output_path,
+                "-af", f"apad=pad_dur={abs(diff)}", "-t", str(duration_sec), padded,
+            ], capture_output=True)
+            os.replace(padded, output_path)
+        else:
+            # 김 → trim
+            trimmed = output_path + ".trimmed.mp3"
+            subprocess.run([
+                "ffmpeg", "-y", "-i", output_path,
+                "-t", str(duration_sec), "-c", "copy", trimmed,
+            ], capture_output=True)
+            os.replace(trimmed, output_path)
+        final_duration = _get_audio_duration(output_path)
+        print(f"[TTS] corrected to {final_duration:.1f}s")
+
     return final_duration

@@ -1,0 +1,30 @@
+{
+  "script": {
+    "intro": {
+      "text": "자 이거 보세요. 신호위반 추돌사고입니다.",
+      "duration_sec": 4,
+      "emphasis": ["신호위반"],
+      "clips": [
+        {"start": "00:00", "end": "00:04", "effect": "normal", "desc": "사고 장면"}
+      ]
+    },
+    "analysis": {
+      "text": "빨간불인데 그냥 직진해버렸어요. 앞차는 아무 잘못 없습니다.",
+      "duration_sec": 6,
+      "emphasis": ["빨간불"],
+      "clips": [
+        {"start": "00:02", "end": "00:04", "effect": "slow_2x", "desc": "신호위반 순간"}
+      ]
+    },
+    "conclusion": {
+      "text": "이건 100대 0. 신호위반 차량 전적 과실입니다.",
+      "duration_sec": 5,
+      "emphasis": ["100대 0"],
+      "clips": [
+        {"start": "00:04", "end": "00:05", "effect": "freeze", "desc": "충돌 정지"}
+      ]
+    }
+  },
+  "total_duration_sec": 15,
+  "style_notes": "짧고 단호한 한문철 스타일"
+}
