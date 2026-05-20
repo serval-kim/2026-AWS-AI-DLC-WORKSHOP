@@ -93,8 +93,8 @@ class AnalysisPipeline:
                     ))
                     logger.error("stage_failed", stage="fault_analysis", error=str(e))
 
-                # Stage 3: Script Generation
-                if fault_result and not fault_result.undetermined:
+                # Stage 3: Script Generation — undetermined여도 항상 실행
+                if fault_result:
                     job.current_stage = "script_generation"
                     self._update_status(job)
 
