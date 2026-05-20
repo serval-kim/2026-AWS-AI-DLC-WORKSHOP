@@ -9,10 +9,13 @@ from video_gen import generate_scene_video
 from video_edit import concat_videos, compose_scene
 
 
-def run_pipeline(script_path: str, output_dir: str = "/tmp/reels_output") -> str:
+def run_pipeline(script_path: str, output_dir: str = "/tmp/reels_output",
+                 mode: str = "serial") -> str:
     """
     전체 파이프라인 실행.
     JSON duration_sec = SSOT. 모든 출력이 이 값에 맞춰짐.
+    
+    mode: "serial" (연속성 우선) | "parallel" (속도 우선)
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -37,7 +40,7 @@ def run_pipeline(script_path: str, output_dir: str = "/tmp/reels_output") -> str
         ]
 
         # 3. 영상 생성 (duration SSOT에 맞춰 트림)
-        video_path = generate_scene_video(prompts, current_image, scene.duration_sec, scene_name)
+        video_path = generate_scene_video(prompts, current_image, scene.duration_sec, scene_name, mode=mode)
 
         # 4. 씬 합성 (영상 + TTS)
         scene_output = os.path.join(output_dir, f"{scene_name}_final.mp4")
@@ -59,4 +62,6 @@ def run_pipeline(script_path: str, output_dir: str = "/tmp/reels_output") -> str
 if __name__ == "__main__":
     import sys
     script_file = sys.argv[1] if len(sys.argv) > 1 else "test/sample_script.json"
-    run_pipeline(script_file)
+    mode = sys.argv[2] if len(sys.argv) > 2 else "serial"
+    print(f"[Pipeline] Mode: {mode}")
+    run_pipeline(script_file, mode=mode)

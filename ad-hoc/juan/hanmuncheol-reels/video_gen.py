@@ -103,31 +103,62 @@ def generate_shot(prompt: str, image_path: str, s3_prefix: str, max_retries: int
 
 
 def generate_scene_video(prompts: list[str], initial_image: str,
-                         duration_sec: int, scene_id: str) -> str:
+                         duration_sec: int, scene_id: str,
+                         mode: str = "serial") -> str:
     """
     씬 전체 영상 생성.
-    - duration_sec(SSOT)에 맞춰 샷 생성 + 마지막 샷 트림
-    - 이전 샷의 마지막 프레임을 다음 샷 입력으로 사용
+    
+    mode:
+      "serial"  — 이전 샷 마지막 프레임을 다음 샷 입력으로 사용 (연속성 ↑, 속도 ↓)
+      "parallel" — 모든 샷이 동일 initial_image 사용, 병렬 생성 (속도 ↑, 연속성 ↓)
+    
     반환: 최종 씬 영상 경로
     """
     from math import ceil
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     num_shots = ceil(duration_sec / SHOT_DURATION)
     last_shot_use = duration_sec % SHOT_DURATION or SHOT_DURATION
 
-    shot_videos = []
-    current_image = initial_image
+    if mode == "parallel":
+        # 병렬: 모든 샷을 동시에 생성 (동일 이미지 사용)
+        def _gen_shot(i):
+            prompt = prompts[i] if i < len(prompts) else prompts[-1]
+            s3_prefix = f"scenes/{scene_id}/shot_{i}"
+            return i, generate_shot(prompt, initial_image, s3_prefix)
 
-    for i in range(num_shots):
-        prompt = prompts[i] if i < len(prompts) else prompts[-1]
-        s3_prefix = f"scenes/{scene_id}/shot_{i}"
+        shot_paths = [None] * num_shots
+        with ThreadPoolExecutor(max_workers=num_shots) as executor:
+            futures = {executor.submit(_gen_shot, i): i for i in range(num_shots)}
+            for future in as_completed(futures):
+                i, path = future.result()
+                shot_paths[i] = path
 
-        shot_path = generate_shot(prompt, current_image, s3_prefix)
+        # 마지막 샷 트림
+        shot_videos = []
+        for i, path in enumerate(shot_paths):
+            if i == num_shots - 1 and last_shot_use < SHOT_DURATION:
+                trimmed = f"/tmp/{scene_id}_shot_{i}_trimmed.mp4"
+                trim_video(path, last_shot_use, trimmed)
+                shot_videos.append(trimmed)
+            else:
+                shot_videos.append(path)
 
-        # 마지막 샷이면 트림
-        if i == num_shots - 1 and last_shot_use < SHOT_DURATION:
-            trimmed = f"/tmp/{scene_id}_shot_{i}_trimmed.mp4"
-            trim_video(shot_path, last_shot_use, trimmed)
-            shot_videos.append(trimmed)
+    else:
+        # 직렬: 이전 샷 마지막 프레임 → 다음 샷 입력
+        shot_videos = []
+        current_image = initial_image
+
+        for i in range(num_shots):
+            prompt = prompts[i] if i < len(prompts) else prompts[-1]
+            s3_prefix = f"scenes/{scene_id}/shot_{i}"
+
+            shot_path = generate_shot(prompt, current_image, s3_prefix)
+
+            if i == num_shots - 1 and last_shot_use < SHOT_DURATION:
+                trimmed = f"/tmp/{scene_id}_shot_{i}_trimmed.mp4"
+                trim_video(shot_path, last_shot_use, trimmed)
+                shot_videos.append(trimmed)
         else:
             shot_videos.append(shot_path)
 
