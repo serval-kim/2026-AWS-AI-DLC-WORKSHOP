@@ -412,7 +412,7 @@ export default function UploadScene3D({ onAnalysisComplete }) {
             border: '1px solid rgba(255,255,255,0.15)',
             borderRadius: 6, color: 'rgba(255,255,255,0.3)',
             fontSize: 11, padding: '5px 14px',
-            cursor: 'pointer', fontFamily: "'Open Sans', sans-serif",
+            cursor: 'pointer', fontFamily: "'DungGeunMo', sans-serif",
             letterSpacing: '0.08em', transition: 'all 0.2s', zIndex: 20,
           }}
           onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'; }}

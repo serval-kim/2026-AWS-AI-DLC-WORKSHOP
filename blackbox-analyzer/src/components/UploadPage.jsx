@@ -103,10 +103,6 @@ export default function UploadPage({ onUpload }) {
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
           }}>& 한문철 릴스 생성기</span>
         </h1>
-        <p style={{ color: '#94a3b8', fontSize: '15px', maxWidth: '480px', margin: '0 auto' }}>
-          블랙박스 영상을 업로드하면 AI가 사고를 분석하고<br />
-          한문철 변호사 스타일의 숏폼 릴스를 자동 생성합니다
-        </p>
       </div>
 
       {/* Upload Card */}

@@ -1,4 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;500;600;700&display=swap");
+@font-face {
+  font-family: 'DungGeunMo';
+  src: url('/DungGeunMo.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
 
 *,
 *::before,
@@ -30,8 +36,8 @@
   --warn: #d4a05a;
   --danger: #c25a5a;
 
-  --font-sans: "Open Sans", -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: "Open Sans", monospace;
+  --font-sans: 'DungGeunMo', sans-serif;
+  --font-mono: 'DungGeunMo', monospace;
 }
 
 html,

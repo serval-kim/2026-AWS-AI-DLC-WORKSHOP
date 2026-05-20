@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const FONT      = "'Open Sans', -apple-system, sans-serif";
-const FONT_MONO = "'Open Sans', monospace";
+const FONT      = "'DungGeunMo', sans-serif";
+const FONT_MONO = "'DungGeunMo', monospace";
 
 // Monochrome tokens
 const BG_PANEL  = 'rgba(12, 12, 16, 0.72)';
@@ -83,6 +83,36 @@ function AnalyzingScreen({ file, onComplete }) {
   const [boxes, setBoxes] = useState([]);
   const [scanY, setScanY] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  const [posterUrl, setPosterUrl] = useState(null);
+  const videoRef = useRef();
+
+  // Capture first frame as poster fallback
+  useEffect(() => {
+    const video = document.createElement('video');
+    video.src = videoUrl.current;
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.currentTime = 0.5; // seek to 0.5s for a meaningful frame
+    video.addEventListener('seeked', () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 360;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        setPosterUrl(canvas.toDataURL('image/jpeg', 0.8));
+      } catch { /* cross-origin or other error — ignore */ }
+    }, { once: true });
+    video.load();
+  }, []);
+
+  // Try to play video on mount
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.play().catch(() => { /* autoplay blocked — poster will show */ });
+    }
+  }, []);
 
   const LABELS = ['VEHICLE_A', 'VEHICLE_B', 'PEDESTRIAN', 'LANE_L', 'LANE_R', 'SIGNAL', 'TRAJECTORY'];
 
@@ -112,8 +142,14 @@ function AnalyzingScreen({ file, onComplete }) {
   useEffect(() => {
     const iv = setInterval(() => {
       setElapsed(e => {
-        if (e >= 6) { clearInterval(iv); onComplete(); }
-        return e + 0.1;
+        const next = e + 0.1;
+        if (next >= 6) {
+          clearInterval(iv);
+          // Defer to next tick to avoid setState-during-render
+          setTimeout(() => onComplete(), 0);
+          return 6;
+        }
+        return next;
       });
     }, 100);
     return () => clearInterval(iv);
@@ -134,16 +170,18 @@ function AnalyzingScreen({ file, onComplete }) {
       animate={{ opacity: 1 }}
       transition={EASE_OUT}
       style={{
-        position: 'absolute', inset: 0, zIndex: 100,
-        background: 'transparent',
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: '#000',
         fontFamily: FONT,
       }}
     >
       <motion.video
+        ref={videoRef}
         initial={{ scale: 1.05, opacity: 0 }}
-        animate={{ scale: 1, opacity: 0.78 }}
+        animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
         src={videoUrl.current}
+        poster={posterUrl || undefined}
         autoPlay loop muted playsInline
         style={{
           position: 'absolute', inset: 0,
@@ -363,16 +401,6 @@ export default function BlackboxOverlay({ visible, onUpload }) {
           { bottom: 16, right: 16, borderBottom: `1px solid ${LINE_HI}`, borderRight: `1px solid ${LINE_HI}` },
         ].map((s, i) => <div key={i} style={{ position: 'absolute', width: 22, height: 22, ...s }} />)}
 
-        {/* Top brand */}
-        <div style={{
-          position: 'absolute', top: 18, left: '50%', transform: 'translateX(-50%)',
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <BlackboxIcon size={12} color={TXT_DIM} />
-          <span style={{ color: TXT_DIM, fontSize: 10, fontWeight: 500, letterSpacing: '0.22em', fontFamily: FONT_MONO }}>
-            BLACKBOX · ANALYZER
-          </span>
-        </div>
 
         <div style={{
           position: 'absolute', bottom: 22, left: 22,
@@ -396,31 +424,24 @@ export default function BlackboxOverlay({ visible, onUpload }) {
         style={{
           position: 'relative', zIndex: 20,
           pointerEvents: 'all',
-          width: '100%', maxWidth: 460,
-          padding: '0 28px',
+          width: '100%', maxWidth: 420,
+          padding: '20px 16px 4px 16px',
+          background: 'rgba(14, 14, 18, 0.85)',
+          backdropFilter: 'blur(20px)',
+          border: `1px solid ${LINE_DIM}`,
+          borderRadius: 16,
         }}
       >
         {/* Title */}
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <p style={{
-            color: TXT_VDIM, fontSize: 9,
-            fontFamily: FONT_MONO, letterSpacing: '0.32em',
-            marginBottom: 18,
-          }}>UPLOAD · 01</p>
-          <h1 style={{
-            fontSize: 'clamp(22px, 3vw, 32px)',
-            fontWeight: 400,
-            color: TXT_HI,
-            marginBottom: 10,
-            lineHeight: 1.25,
-            letterSpacing: '-0.015em',
-          }}>
-            블랙박스 영상 업로드
-          </h1>
-          <p style={{ color: TXT_DIM, fontSize: 12, fontWeight: 300, letterSpacing: '0.02em' }}>
-            AI가 사고를 분석하고 한문철 스타일 릴스를 생성합니다
-          </p>
-        </div>
+        <h2 style={{
+          textAlign: 'center',
+          fontSize: 16, fontWeight: 600,
+          color: TXT_HI,
+          marginBottom: 20,
+          letterSpacing: '0.02em',
+        }}>
+          블랙박스 영상을 업로드 해주세요
+        </h2>
 
         {/* Drop zone */}
         <motion.div
@@ -432,13 +453,14 @@ export default function BlackboxOverlay({ visible, onUpload }) {
           onClick={() => !file && inputRef.current.click()}
           style={{
             position: 'relative',
-            background: BG_PANEL,
-            border: `1px solid ${dragOver ? LINE_HI : file ? LINE_MID : LINE_DIM}`,
+            background: dragOver ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${dragOver ? LINE_HI : LINE_DIM}`,
+            borderRadius: 12,
             cursor: file ? 'default' : 'pointer',
-            backdropFilter: 'blur(12px)',
-            marginBottom: 14,
-            height: file ? 200 : 156,
+            marginBottom: 16,
+            height: file ? 320 : 200,
             overflow: 'hidden',
+            transition: 'border-color 0.2s, background 0.2s',
           }}
         >
           <input
@@ -459,28 +481,25 @@ export default function BlackboxOverlay({ visible, onUpload }) {
                 transition={EASE_OUT}
                 style={{
                   height: '100%', display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center', gap: 14,
+                  alignItems: 'center', justifyContent: 'center', gap: 12,
                 }}
               >
                 <motion.div
                   animate={{ y: [0, -3, 0] }}
                   transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
                 >
-                  <UploadIcon size={36} color={dragOver ? TXT_HI : LINE_HI} />
+                  <UploadIcon size={32} color={dragOver ? TXT_HI : TXT_DIM} />
                 </motion.div>
                 <div style={{ textAlign: 'center' }}>
                   <p style={{
                     color: dragOver ? TXT_HI : TXT_MID,
-                    fontSize: 13, fontWeight: 400, marginBottom: 6,
+                    fontSize: 14, fontWeight: 500, marginBottom: 4,
                     transition: 'color 0.2s',
                   }}>
-                    {dragOver ? '여기에 놓으세요' : '영상을 드래그하거나 클릭'}
+                    {dragOver ? '여기에 놓으세요' : 'Drop file here or browse'}
                   </p>
-                  <p style={{
-                    color: TXT_VDIM, fontSize: 9,
-                    letterSpacing: '0.16em', fontFamily: FONT_MONO,
-                  }}>
-                    MP4 · AVI · MOV · MAX 500MB
+                  <p style={{ color: TXT_VDIM, fontSize: 12 }}>
+                    MP4, AVI, MOV up to 500MB
                   </p>
                 </div>
               </motion.div>
@@ -496,46 +515,72 @@ export default function BlackboxOverlay({ visible, onUpload }) {
                 <video
                   src={previewUrl.current}
                   autoPlay loop muted playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: 11 }}
                 />
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 50%)',
-                  pointerEvents: 'none',
-                }} />
-                <div style={{
-                  position: 'absolute', bottom: 10, left: 12, right: 12,
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                }}>
-                  <span style={{
-                    color: TXT_HI, fontSize: 10, fontWeight: 500,
-                    letterSpacing: '0.05em',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    maxWidth: '70%',
-                  }}>{file.name}</span>
-                  <span style={{
-                    color: TXT_DIM, fontSize: 9,
-                    fontFamily: FONT_MONO, letterSpacing: '0.08em',
-                  }}>{formatSize(file.size)}</span>
-                </div>
-                <button
-                  onClick={e => { e.stopPropagation(); setFile(null); setError(''); }}
-                  style={{
-                    position: 'absolute', top: 10, right: 10,
-                    background: 'rgba(0,0,0,0.7)',
-                    border: `1px solid ${LINE_MID}`,
-                    color: TXT_MID,
-                    padding: '3px 9px',
-                    fontSize: 9,
-                    cursor: 'pointer',
-                    fontFamily: FONT_MONO,
-                    letterSpacing: '0.1em',
-                  }}
-                >CHANGE</button>
               </motion.div>
             )}
           </AnimatePresence>
         </motion.div>
+
+        {/* File info card — shown when file is attached */}
+        <AnimatePresence>
+          {file && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={EASE_OUT}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 14px',
+                background: 'rgba(255,255,255,0.03)',
+                border: `1px solid ${LINE_DIM}`,
+                borderRadius: 10,
+                marginBottom: 16,
+              }}
+            >
+              {/* Video icon */}
+              <div style={{
+                width: 36, height: 36,
+                borderRadius: 8,
+                background: 'rgba(200, 60, 60, 0.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                  <rect x="2" y="4" width="12" height="12" rx="2" fill="rgba(200,60,60,0.8)" />
+                  <path d="M14 8L18 6V14L14 12" fill="rgba(200,60,60,0.6)" />
+                  <polygon points="7,7 7,13 12,10" fill="white" />
+                </svg>
+              </div>
+              {/* File info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{
+                  color: TXT_HI, fontSize: 13, fontWeight: 500,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{file.name}</p>
+                <p style={{ color: TXT_DIM, fontSize: 11 }}>{formatSize(file.size)}</p>
+              </div>
+              {/* Delete button */}
+              <button
+                onClick={() => { setFile(null); setError(''); }}
+                style={{
+                  background: 'transparent', border: 'none',
+                  cursor: 'pointer', padding: 6,
+                  color: TXT_DIM, display: 'flex',
+                  transition: 'color 0.2s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = TXT_HI}
+                onMouseLeave={e => e.currentTarget.style.color = TXT_DIM}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 4h10M5.5 4V3a1 1 0 011-1h3a1 1 0 011 1v1M6 7v4M8 7v4M10 7v4M4 4l.7 8.4a1 1 0 001 .9h4.6a1 1 0 001-.9L12 4"
+                    stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Error */}
         <AnimatePresence>
@@ -548,11 +593,11 @@ export default function BlackboxOverlay({ visible, onUpload }) {
               style={{
                 background: 'rgba(194,90,90,0.06)',
                 border: '1px solid rgba(194,90,90,0.25)',
+                borderRadius: 8,
                 padding: '8px 12px',
                 marginBottom: 12,
                 color: '#d18585',
                 fontSize: 11,
-                letterSpacing: '0.02em',
               }}
             >
               {error}
@@ -560,7 +605,7 @@ export default function BlackboxOverlay({ visible, onUpload }) {
           )}
         </AnimatePresence>
 
-        {/* CTA — pill button like reference */}
+        {/* CTA — dark pill button like reference */}
         <AnimatePresence>
           {file && (
             <motion.button
@@ -568,38 +613,24 @@ export default function BlackboxOverlay({ visible, onUpload }) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 6 }}
               transition={EASE_OUT}
-              whileHover={{ scale: 1.005 }}
-              whileTap={{ scale: 0.995 }}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.99 }}
               onClick={() => setAnalyzing(true)}
               style={{
                 width: '100%', padding: '14px 24px',
-                background: 'transparent',
-                border: `1px solid ${LINE_HI}`,
+                background: TXT_HI,
+                border: 'none',
                 borderRadius: 100,
-                color: TXT_HI,
-                fontSize: 12, fontWeight: 400,
+                color: '#0a0a0c',
+                fontSize: 14, fontWeight: 600,
                 cursor: 'pointer',
                 fontFamily: FONT,
-                letterSpacing: '0.18em',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                transition: 'border-color 0.25s, background 0.25s',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.borderColor = TXT_HI;
-                e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.borderColor = LINE_HI;
-                e.currentTarget.style.background = 'transparent';
+                letterSpacing: '0.02em',
+                fontWeight: 700,
+                marginBottom: "12px",
               }}
             >
-              <span>ANALYZE</span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{
-                  width: 24, height: 1, background: TXT_HI,
-                }} />
-                <span>→</span>
-              </span>
+              분석하기
             </motion.button>
           )}
         </AnimatePresence>
