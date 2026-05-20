@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import VideoTemplate from './VideoTemplate';
+import VideoEngine from './VideoEngine';
+import MUNCHEOL_SCRIPT from '../assets/muncheol-script-oneshot.json';
 
 const MOCK_RESULT = {
   analysisId: 'ANA-2026-0520-7842',
@@ -250,6 +253,20 @@ function ReelsPlayer() {
 
 export default function ResultPage({ file, onReset }) {
   const [activeTab, setActiveTab] = useState('fault');
+  const [liveSubtitle, setLiveSubtitle] = useState('');
+
+  // file prop이 File 객체면 Object URL 생성, 없으면 fallback
+  const videoSrc = React.useMemo(() => {
+    if (file instanceof File) return URL.createObjectURL(file);
+    return '/bb_h264.mp4'; // 개발용 fallback
+  }, [file]);
+
+  // 컴포넌트 언마운트 시 Object URL 해제 (메모리 누수 방지)
+  React.useEffect(() => {
+    return () => {
+      if (file instanceof File) URL.revokeObjectURL(videoSrc);
+    };
+  }, [videoSrc]);
 
   const tabs = [
     { id: 'fault', label: '과실비율', icon: '⚖️' },
@@ -500,8 +517,28 @@ export default function ResultPage({ file, onReset }) {
               <p style={{ color: '#475569', fontSize: '12px', marginBottom: '24px' }}>
                 9:16 세로형 · 60초 이내 · MP4
               </p>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', alignItems: 'start' }}>
-                <ReelsPlayer />
+                {/* VideoTemplate + VideoEngine 통합 */}
+                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <VideoTemplate
+                    titleLine1={MOCK_RESULT.accidentType.split(' ')[0]}
+                    titleLine2={MOCK_RESULT.accidentType.split(' ').slice(1).join(' ') || '사고 분석'}
+                    subtitle={liveSubtitle || MOCK_RESULT.script.conclusion}
+                    subtitleLabel="AI 판결"
+                    scale={0.28}
+                    style={{ borderRadius: 8, overflow: 'hidden', boxShadow: '0 0 24px rgba(0,194,255,.25)' }}
+                    videoContent={
+                      <VideoEngine
+                        src={videoSrc}
+                        script={MUNCHEOL_SCRIPT}
+                        showSubtitle={false}
+                        onSubtitleChange={setLiveSubtitle}
+                        style={{ width: '100%', height: '100%' }}
+                      />
+                    }
+                  />
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   <div style={{
                     background: '#0a0e1a', border: '1px solid #1e2d4a',

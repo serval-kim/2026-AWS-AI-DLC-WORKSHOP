@@ -41,3 +41,7 @@ ad-hoc/juan/nova_reel_*.py
 ad-hoc/juan/*.mp4
 ad-hoc/juan/*.png
 ad-hoc/juan/image*
+node_modules/\n.DS_Store\n*.log
+blackbox-analyzer/public/bb.mp4
+blackbox-analyzer/public/bb_h264.mp4
+blackbox-analyzer/src/assets/bb.mp4
