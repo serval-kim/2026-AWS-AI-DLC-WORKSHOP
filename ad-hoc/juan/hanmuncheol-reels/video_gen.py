@@ -159,14 +159,13 @@ def generate_scene_video(prompts: list[str], initial_image: str,
                 trimmed = f"/tmp/{scene_id}_shot_{i}_trimmed.mp4"
                 trim_video(shot_path, last_shot_use, trimmed)
                 shot_videos.append(trimmed)
-        else:
-            shot_videos.append(shot_path)
+            else:
+                shot_videos.append(shot_path)
 
-        # 다음 샷을 위해 마지막 프레임 추출
-        if i < num_shots - 1:
-            frame_path = f"/tmp/{scene_id}_frame_{i}.png"
-            extract_last_frame(shot_path, frame_path)
-            current_image = frame_path
+            if i < num_shots - 1:
+                frame_path = f"/tmp/{scene_id}_frame_{i}.png"
+                extract_last_frame(shot_path, frame_path)
+                current_image = frame_path
 
     # concat
     output = f"/tmp/{scene_id}_full.mp4"
